@@ -161,7 +161,7 @@
       return !cur[s.id] || OB.when(cur[s.id].report.receivedAt).hours >= 24;
     }).map(function (s) {
       var c = cur[s.id];
-      var upd = c ? '<span class="fr ' + OB.when(c.report.receivedAt).level + '">' + esc(OB.when(c.report.receivedAt).label) + "</span> " + OB.sourceChip(c.report.source) : '<span class="fr stale">No update</span>';
+      var upd = c ? '<span class="fr ' + OB.when(c.report.receivedAt).level + '">' + esc(OB.when(c.report.receivedAt).label) + "</span> " + OB.sourceChip(c.report.source, c.report.id, s.id) : '<span class="fr stale">No update</span>';
       return '<tr><th scope="row"><b>' + esc(s.name) + '</b><br><span class="conf">' + esc(S.orgById[s.org].short) + " · " + esc(s.town) + "</span></th><td>" + upd + '</td><td class="sum">' + esc(c ? OB.entrySummary(c.entry) : "—") +
         '</td><td><button type="button" class="btn small" data-site="' + s.id + '">Update<span class="sr"> ' + esc(s.name) + "</span></button></td></tr>";
     });
@@ -174,7 +174,7 @@
     $("act-rows").innerHTML = S.reports().map(function (r) {
       var f = OB.when(r.receivedAt);
       var names = r.entries.map(function (e) { return e.siteId ? siteName(e.siteId) : "Unassigned"; });
-      return "<tr><td>" + esc(f.label) + "</td><td>" + OB.sourceChip(r.source) + "</td><td>" + esc(r.by) + (r.reason ? '<br><span class="conf">“' + esc(r.reason) + "”</span>" : "") +
+      return "<tr><td>" + esc(f.label) + "</td><td>" + OB.sourceChip(r.source, r.id) + "</td><td>" + esc(r.by) + (r.reason ? '<br><span class="conf">“' + esc(r.reason) + "”</span>" : "") +
         '</td><td class="sum">' + esc(names.join(", ")) + "</td><td>" + statusChip(r) + "</td></tr>";
     }).join("");
   }

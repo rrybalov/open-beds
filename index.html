@@ -9,6 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Crect width=%2716%27 height=%2716%27 rx=%273%27 fill=%27%23262673%27/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
   <link rel="stylesheet" href="assets/styles.css">
 </head>
 <body>
@@ -58,6 +59,10 @@
         <select id="f-loca" class="input"><option value="any">Any level</option></select>
       </div>
       <div class="filter-col">
+        <label class="lbl" for="f-pay">Payment</label>
+        <select id="f-pay" class="input"><option value="any">Any payment</option></select>
+      </div>
+      <div class="filter-col">
         <label class="lbl" for="f-search">Search</label>
         <input id="f-search" class="input" type="search" placeholder="Provider, organization or town" autocomplete="off">
       </div>
@@ -72,6 +77,7 @@
     <div class="viewbar">
       <div class="tabs" role="tablist" aria-label="Views">
         <button type="button" role="tab" id="tab-find" aria-controls="view-find" aria-selected="true">Find a bed</button>
+        <button type="button" role="tab" id="tab-map" aria-controls="view-map" aria-selected="false" tabindex="-1">Map</button>
         <button type="button" role="tab" id="tab-grid" aria-controls="view-grid" aria-selected="false" tabindex="-1">All sites</button>
         <button type="button" role="tab" id="tab-updates" aria-controls="view-updates" aria-selected="false" tabindex="-1">Updates</button>
       </div>
@@ -81,6 +87,7 @@
           <option value="region">Closest region first</option>
           <option value="count">Most open beds first</option>
           <option value="recent">Most recent update first</option>
+          <option value="distance" disabled>Nearest to searched location</option>
         </select>
       </div>
     </div>
@@ -88,6 +95,22 @@
     <div id="results" tabindex="-1">
       <p class="status" id="status" aria-live="polite"></p>
       <section id="view-find" role="tabpanel" aria-labelledby="tab-find"></section>
+      <section id="view-map" role="tabpanel" aria-labelledby="tab-map" hidden>
+        <form class="mapsearch" id="map-form" role="search">
+          <label class="lbl" for="map-q">Address or ZIP code</label>
+          <div class="mapsearch-row">
+            <input id="map-q" class="input" type="search" placeholder="15219, or 1 Smithfield St, Pittsburgh" autocomplete="off" enterkeyhint="search">
+            <button class="btn primary" type="submit">Find nearest</button>
+            <button class="btn" type="button" id="map-me">Use my location</button>
+            <button class="btn" type="button" id="map-clear" hidden>Clear</button>
+          </div>
+          <p class="hint" id="map-msg">Looked up with OpenStreetMap. Enter a ZIP or address only — never a client’s name.</p>
+        </form>
+        <div class="maplayout">
+          <div class="mapbox"><div id="map" class="map" role="region" aria-label="Map of providers"></div><p class="map-off" id="map-off" hidden>The map couldn’t load on this network. The list still sorts by distance.</p></div>
+          <div class="maplist-wrap"><ol class="maplist" id="map-list" aria-label="Providers by distance"></ol></div>
+        </div>
+      </section>
       <section id="view-grid" role="tabpanel" aria-labelledby="tab-grid" hidden></section>
       <section id="view-updates" role="tabpanel" aria-labelledby="tab-updates" hidden></section>
     </div>
@@ -102,6 +125,7 @@
   <script src="assets/parser.js"></script>
   <script src="assets/store.js"></script>
   <script src="assets/common.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
   <script src="assets/board.js"></script>
 </body>
 </html>

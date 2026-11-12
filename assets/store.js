@@ -49,17 +49,17 @@
           id: "seed-" + em.key, source: "email", status: "published", auto: true,
           receivedAt: new Date(now - em.hoursAgo * 36e5).toISOString(),
           orgId: parsed.orgId, by: "Email from " + em.from.split("@")[1],
-          email: { from: em.from, subject: em.subject, body: em.body },
+          email: { from: em.from, subject: em.subject, body: em.body, originalSent: em.originalSent },
           parse: { template: parsed.template, confidence: parsed.confidence, warnings: parsed.warnings, summary: parsed.summary },
           entries: parsed.entries
         };
       });
-      return { version: 1, seededAt: new Date(now).toISOString(), touched: false, settings: { autoPublish: true }, reports: reports };
+      return { version: 2, seededAt: new Date(now).toISOString(), touched: false, settings: { autoPublish: true }, reports: reports };
     }
 
     function load() {
       var s = read();
-      if (!s || s.version !== 1 || (!s.touched && (Date.now() - new Date(s.seededAt)) / 36e5 > RESEED_AFTER_H)) {
+      if (!s || s.version !== 2 || (!s.touched && (Date.now() - new Date(s.seededAt)) / 36e5 > RESEED_AFTER_H)) {
         s = seed();
         memory = s;
         try { root.localStorage && root.localStorage.setItem(KEY, JSON.stringify(s)); } catch (e) { /* ignore */ }
@@ -92,7 +92,7 @@
         var c = cur[p.id];
         var site = {
           id: p.id, name: p.name, fullName: p.fullName, org: orgById[p.org].short, orgId: p.org, town: p.town, region: p.region,
-          population: p.population, services: p.services, contact: p.contact, fit: p.fit || {}, beds: p.beds
+          population: p.population, services: p.services, contact: p.contact, fit: p.fit || {}, geo: p.geo || null, beds: p.beds
         };
         if (!c) { site.noReport = true; return site; }
         var e = c.entry;

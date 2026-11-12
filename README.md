@@ -12,7 +12,7 @@ Counts reach the board three ways:
 
 | Page | For | What it does |
 |---|---|---|
-| [`index.html`](index.html) | Pathways intake staff | **Find a bed** (filter by bed type, sex, age and LOCA level; nearest first; each card shows who the site takes), **All sites** grid, **Updates** feed |
+| [`index.html`](index.html) | Pathways intake staff | **Find a bed** (filter by bed type, sex, age, LOCA level and payment; each card shows who the site takes), **Map** (type an address or ZIP, see the nearest sites and their open beds), **All sites** grid, **Updates** feed. Every Email / Form / DHS tag opens its source — the email itself, with the lines the board read highlighted. |
 | [`update.html`](update.html) | Providers | Enter open beds per site. A personal link (`update.html?org=gaiser`) preselects the provider. |
 | [`admin.html`](admin.html) | DHS staff | **Email inbox** with review queue and an email simulator, **Sites** with manual updates, **Activity** log, **Settings** |
 
@@ -36,6 +36,11 @@ No build step. Serve the folder (`python3 -m http.server`) or open `index.html`.
 | `docs/architecture.md` | Sources, email alias options, API, security |
 | `docs/email-aggregation.md` | The 7 emails side by side, with totals |
 | `docs/mvp-recommendations.md` | Board design recommendations |
+
+## Map and payment data
+
+- **Map:** Leaflet with CARTO/OpenStreetMap tiles, loaded from cdnjs. Addresses and ZIPs are looked up with OpenStreetMap's Nominatim, biased to Pennsylvania. Distances are straight-line; most pins sit at the town centre (`geo.precision` in `data/sites.js`) until street addresses are on file. If the map library is blocked, the list still sorts by distance. For production, use the county's own geocoder so no address leaves DHS systems.
+- **Payment:** `fit.pay` in `data/sites.js` records what each site is known to take (`true`) or not take (`false`). Few sites have this on file yet, so the filter hides only sites known *not* to take a payment type, lists confirmed sites first, and tells staff to ask about the rest.
 
 ## Privacy
 

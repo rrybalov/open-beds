@@ -59,9 +59,9 @@
         beds: [{ type: "shared", covers: ["detox", "residential"], label: "detox or rehab" }] },
 
       // Pyramid Healthcare
-      { id: "silvermist-pgh", org: "pyramid", name: "Silvermist Pittsburgh", aliases: ["silvermist pittsburgh"], town: "Pittsburgh area", region: "western", population: "adult", services: ["SUD", "MH"], contact: null,
+      { id: "silvermist-pgh", org: "pyramid", name: "Silvermist Pittsburgh", aliases: ["silvermist pittsburgh"], town: "Renfrew", region: "western", population: "adult", services: ["SUD", "MH"], contact: null,
         beds: [{ type: "residential", sexes: ["male"] }] },
-      { id: "silvermist-pocono", org: "pyramid", name: "Silvermist Pocono", aliases: ["silvermist pocono"], town: "Pocono region", region: "eastern", population: "adult", services: ["MH"], contact: null,
+      { id: "silvermist-pocono", org: "pyramid", name: "Silvermist Pocono", aliases: ["silvermist pocono"], town: "Moscow", region: "eastern", population: "adult", services: ["MH"], contact: null,
         beds: [{ type: "residential", sexes: ["female"] }] },
       { id: "providence-house", org: "pyramid", name: "Providence House", aliases: ["providence house"], town: "Location not stated", region: "unknown", population: "adult", services: ["SUD"], contact: null,
         beds: [{ type: "php", sexes: ["any"] }] },
@@ -111,13 +111,40 @@
     "upmc-mercy": { levels: ["wm4"], takes: ["Medically managed detox (hospital unit, 18 beds)"], known: ["medical"], source: ["worksheet"] },
     "upmc-mckeesport": { levels: ["wm4", "4"], takes: ["People who need medical stabilization"], requires: ["Rehab: already through detox, relapsed, and needs medical treatment"], known: ["medical"], source: ["worksheet"] },
     "vfmc": { levels: ["wm4", "4", "37"], takes: ["Medically complex: IV antibiotics, wound care, CHF, diabetes, hypertension"], payer: "Pre-certification handled by VFMC", known: ["medical"], source: ["email"] },
-    "silvermist-pgh": { serves: "Adult men", takes: ["Mental health or substance use"], payer: "Private insurance only", source: ["email", "worksheet"] },
-    "silvermist-pocono": { serves: "Adult women", excludes: ["Substance use — mental health beds only"], payer: "Silvermist is listed as private insurance only — confirm", source: ["email", "worksheet"] },
+    "silvermist-pgh": { serves: "Adult men", takes: ["Mental health or substance use"], payer: "Private insurance only", pay: { private: true, medicaid: false, sca: false, medicare: false }, source: ["email", "worksheet"] },
+    "silvermist-pocono": { serves: "Adult women", excludes: ["Substance use — mental health beds only"], payer: "Silvermist is listed as private insurance only — confirm", pay: { private: true, medicaid: false, sca: false, medicare: false }, source: ["email", "worksheet"] },
     "providence-house": { levels: ["25"], takes: ["Substance use"], source: ["email"] },
-    "gaiser": { levels: ["35", "21", "1"], serves: "Adults · separate men’s and women’s programs", takes: ["MAT"], payer: "Most Western PA SCA funding", known: ["moud"], source: ["email", "worksheet"] },
+    "gaiser": { levels: ["35", "21", "1"], serves: "Adults · separate men’s and women’s programs", takes: ["MAT"], payer: "Most Western PA SCA funding", pay: { sca: true }, known: ["moud"], source: ["email", "worksheet"] },
     "spiritlife": { levels: ["wm37", "35"], takes: ["Transportation offered"], source: ["worksheet", "email"] }
   };
   OPEN_BEDS_SITES.sites.forEach(function (s) { s.fit = FIT[s.id] || { source: [] }; });
+
+  /*
+   * pay (inside fit): payment types a site is known to take (true) or not take (false).
+   * Missing = not on file. The board's payment filter hides only sites known NOT to take it.
+   */
+  OPEN_BEDS_SITES.payTypes = [
+    ["medicaid", "Medical Assistance (HealthChoices)", "Medical Assistance"],
+    ["sca", "County / SCA funding (uninsured)", "SCA funding"],
+    ["private", "Private insurance", "private insurance"],
+    ["medicare", "Medicare", "Medicare"]
+  ];
+
+  /*
+   * geo: map pin. precision "address" = the facility; "town" = town centre (street address
+   * not on file); "area" = rough area only. Sites with no geo are listed under the map.
+   */
+  var GEO = {
+    "bowling-green": [39.8468, -75.7116, "town"], "bradford": [41.9834, -76.9483, "town"],
+    "cove-forge": [40.4623, -78.1997, "town"], "allenwood": [41.1062, -76.8730, "town"],
+    "lehigh": [40.6259, -75.3705, "town"], "york": [39.9626, -76.7277, "town"],
+    "mt-zion": [39.9626, -76.7277, "town"], "york-php": [39.9626, -76.7277, "town"],
+    "pmrc": [41.1040, -75.2510, "town"], "hcrc": [41.1534, -76.1505, "town"], "hcrc-adol": [41.1534, -76.1505, "town"],
+    "upmc-mercy": [40.4362, -79.9852, "address"], "upmc-mckeesport": [40.3487, -79.8544, "address"],
+    "vfmc": [40.1215, -75.3399, "town"], "silvermist-pgh": [40.8073, -79.9753, "town"], "silvermist-pocono": [41.3376, -75.5185, "town"],
+    "gaiser": [40.8612, -79.8953, "town"], "spiritlife": [40.6195, -79.0372, "town"]
+  };
+  OPEN_BEDS_SITES.sites.forEach(function (s) { var g = GEO[s.id]; s.geo = g ? { lat: g[0], lng: g[1], precision: g[2] } : null; });
   OPEN_BEDS_SITES.levels = [
     ["wm4", "WM 4", "Medically managed withdrawal"], ["wm37", "WM 3.7", "Medically monitored withdrawal"],
     ["4", "4", "Medically managed inpatient"], ["37", "3.7", "Medically monitored inpatient"],
