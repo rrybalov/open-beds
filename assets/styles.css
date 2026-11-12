@@ -289,3 +289,21 @@ table.sitetbl { width: 100%; border-collapse: collapse; font-size: 14px; min-wid
   .side { flex-wrap: wrap; gap: 8px; }
 }
 .site-edit .full-name { font-weight: 400; color: var(--slate); font-size: 14px; }
+
+/* Who they take */
+.fit { grid-column: 2 / 4; border-top: 1px solid #ECECF7; padding-top: 10px; }
+.fit-h { margin: 0 0 6px; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--dark-blue); }
+.fit dl { margin: 0; display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 5px 12px; font-size: 13px; line-height: 1.4; }
+.fit dt { color: var(--stone); font-weight: 500; }
+.fit dd { margin: 0; color: var(--black); }
+.lvl-chip { display: inline-block; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 6px; border: 1px solid var(--light-blue); color: var(--dark-blue); background: var(--white); margin: 0 4px 2px 0; }
+.lvl-chip.hit { background: var(--dark-blue); color: var(--white); border-color: var(--dark-blue); }
+.fit-note { display: block; font-size: 12px; color: var(--stone); margin-top: 2px; }
+.fit-x { color: #8C1D18; font-weight: 500; }
+.fit-none { color: var(--stone); }
+.fit-src { margin: 6px 0 0; font-size: 12px; color: var(--stone); }
+.grid .site-name .grid-lv { display: block; font-size: 12px; color: var(--dark-blue); margin-top: 2px; }
+@media (max-width: 760px) {
+  .fit { grid-column: 1 / 3; }
+  .fit dl { grid-template-columns: 84px minmax(0, 1fr); }
+}

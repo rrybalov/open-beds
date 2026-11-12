@@ -12,7 +12,7 @@ Counts reach the board three ways:
 
 | Page | For | What it does |
 |---|---|---|
-| [`index.html`](index.html) | Pathways intake staff | **Find a bed** (filter by type, sex, age; nearest first), **All sites** grid, **Updates** feed |
+| [`index.html`](index.html) | Pathways intake staff | **Find a bed** (filter by bed type, sex, age and LOCA level; nearest first; each card shows who the site takes), **All sites** grid, **Updates** feed |
 | [`update.html`](update.html) | Providers | Enter open beds per site. A personal link (`update.html?org=gaiser`) preselects the provider. |
 | [`admin.html`](admin.html) | DHS staff | **Email inbox** with review queue and an email simulator, **Sites** with manual updates, **Activity** log, **Settings** |
 
@@ -26,7 +26,7 @@ No build step. Serve the folder (`python3 -m http.server`) or open `index.html`.
 
 | Path | What it is |
 |---|---|
-| `data/sites.js` | Providers, sites, sender domains and each site's bed layout |
+| `data/sites.js` | Providers, sites, sender domains, each site's bed layout, and who it takes (LOCA levels, population, exclusions, prerequisites, payment — from the Bed Search Worksheet and emails) |
 | `data/sample-emails.js` | The 7 sample emails as text (names removed), plus 2 test cases |
 | `assets/parser.js` | Email → per-site counts. Runs in the browser and in Node. |
 | `assets/store.js` | The update log (demo adapter). The only file that changes for production. |

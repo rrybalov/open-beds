@@ -92,7 +92,7 @@
         var c = cur[p.id];
         var site = {
           id: p.id, name: p.name, fullName: p.fullName, org: orgById[p.org].short, orgId: p.org, town: p.town, region: p.region,
-          population: p.population, services: p.services, contact: p.contact, levels: p.levels, tags: p.tags, beds: p.beds
+          population: p.population, services: p.services, contact: p.contact, fit: p.fit || {}, beds: p.beds
         };
         if (!c) { site.noReport = true; return site; }
         var e = c.entry;

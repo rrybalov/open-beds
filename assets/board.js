@@ -11,7 +11,11 @@
   var TYPE_LABEL = OB.TYPE_LABEL;
   var SEX_SHORT = { male: "M", female: "F", any: "" };
 
-  var state = { type: "any", sex: "any", age: "adult", q: "", mh: false, recentOnly: false, view: "find", sort: "region" };
+  var state = { type: "any", sex: "any", age: "adult", loca: "any", q: "", mh: false, recentOnly: false, view: "find", sort: "region" };
+  var LEVEL = {};
+  S.sites.levels.forEach(function (l) { LEVEL[l[0]] = { short: l[1], long: l[2] }; });
+  var KNOWN = [["pregnancy", "pregnancy"], ["moud", "MOUD"], ["medical", "medical limits"], ["legal", "legal history"]];
+  var SOURCE_LABEL = { worksheet: "Bed Search Worksheet", email: "provider email", website: "provider website" };
   function $(id) { return document.getElementById(id); }
   function plural(n, a, b) { return OB.plural(n, a, b); }
 
@@ -79,6 +83,7 @@
     if (state.age !== "all" && site.population !== state.age) return false;
     if (!state.mh && site.services.indexOf("SUD") < 0) return false;
     if (state.recentOnly && (site.noReport || OB.when(site.report.receivedAt).hours >= 24)) return false;
+    if (state.loca !== "any" && !((site.fit.levels || []).indexOf(state.loca) > -1)) return false;
     if (state.q) {
       var hay = [site.name, site.fullName, site.org, site.town].join(" ").toLowerCase();
       if (hay.indexOf(state.q) < 0) return false;
@@ -176,10 +181,31 @@
     if (state.type === "any" && site.shared && state.sex === "any") out.push('<span class="pill warn">Not split between detox and rehab</span>');
     if (site.sexSplitInferred && (state.sex !== "any" || (a.parts && a.parts.length > 1) || state.type === "any")) out.push('<span class="pill warn">Male/female read from unlabeled columns</span>');
     if (site.population === "adolescent") out.push('<span class="pill tag">Adolescent unit</span>');
-    if (site.levels) out.push('<span class="pill tag">Levels ' + site.levels.join(" · ") + "</span>");
     (site.notes || []).forEach(function (n) { out.push('<span class="pill">' + esc(n) + "</span>"); });
-    (site.tags || []).forEach(function (t) { out.push('<span class="pill tag">' + esc(t) + "</span>"); });
     return out.join("");
+  }
+
+  // "Who they take": levels of care (to match the LOCA), population, exclusions, prerequisites, payment.
+  function levelChips(f) {
+    if (!f.levels || !f.levels.length) return '<span class="fit-none">Not on file</span>';
+    return f.levels.map(function (c) {
+      return '<span class="lvl-chip' + (state.loca === c ? " hit" : "") + '" title="' + esc(LEVEL[c].long) + '">' + esc(LEVEL[c].short) + "</span>";
+    }).join("");
+  }
+  function fitSection(site) {
+    var f = site.fit || {};
+    var rows = [["LOCA levels", levelChips(f) + (f.levelsNote ? '<span class="fit-note">' + esc(f.levelsNote) + "</span>" : "")]];
+    if (f.serves) rows.push(["Serves", esc(f.serves)]);
+    (f.excludes || []).forEach(function (x) { rows.push(["Won’t take", '<span class="fit-x">' + esc(x) + "</span>"]); });
+    (f.requires || []).forEach(function (x) { rows.push(["Requires", esc(x)]); });
+    if (f.takes && f.takes.length) rows.push(["Takes", esc(f.takes.join(" · "))]);
+    if (f.payer) rows.push(["Payment", esc(f.payer)]);
+    (f.notes || []).forEach(function (x) { rows.push(["Admissions", esc(x)]); });
+    var missing = KNOWN.filter(function (k) { return (f.known || []).indexOf(k[0]) < 0; }).map(function (k) { return k[1]; });
+    if (missing.length) rows.push(["Not on file", '<span class="fit-none">' + esc(missing.join(" · ")) + " — ask when you call</span>"]);
+    var src = (f.source || []).map(function (s) { return SOURCE_LABEL[s]; });
+    return '<div class="fit"><p class="fit-h">Who they take</p><dl>' + rows.map(function (r) { return "<dt>" + r[0] + "</dt><dd>" + r[1] + "</dd>"; }).join("") + "</dl>" +
+      (src.length ? '<p class="fit-src">From the ' + esc(src.join(" and ")) + "</p>" : "") + "</div>";
   }
 
   var PHONE_SVG = '<svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2Z"/></svg>';
@@ -205,6 +231,7 @@
       '<div class="where">' + esc(site.org) + " · " + esc(site.town) + " · " + esc(regionLabel(site)) + "</div>" +
       '<div class="split">' + splitPills(site, a) + "</div></div>" +
       '<div class="side"><span class="fr ' + f.level + '" title="' + esc(f.age) + '">' + esc(f.label) + "</span>" + OB.sourceChip(site.report.source) + call + "</div>" +
+      fitSection(site) +
       '<details class="src"><summary>Where this count came from</summary><p>' + sourceDetail(site) + " Received " + esc(f.label) + " (" + esc(f.age) + ").</p></details>" +
       "</article>";
   }
@@ -252,6 +279,10 @@
     var foot = [];
     if (other) foot.push(plural(other, "other site") + " in recent reports " + (other === 1 ? "doesn’t" : "don’t") + " offer this or didn’t mention it.");
     if (none.length) foot.push(plural(none.length, "site") + " " + (none.length === 1 ? "hasn’t" : "haven’t") + " reported yet: " + none.map(function (r) { return esc(r.site.name); }).join(", ") + ".");
+    if (state.loca !== "any") {
+      var noLv = S.boardSites().filter(function (s) { return !(s.fit.levels && s.fit.levels.length); }).length;
+      foot.push("Showing sites that accept LOCA level " + esc(LEVEL[state.loca].short) + ". " + plural(noLv, "site") + " with no levels on file " + (noLv === 1 ? "is" : "are") + " hidden — call them to check.");
+    }
     if (foot.length) html += '<p class="footnote">' + foot.join(" ") + "</p>";
     $("view-find").innerHTML = html;
   }
@@ -302,7 +333,8 @@
             }
           }
         }
-        return "<tr><th scope=\"row\" class=\"site-name\"><b>" + esc(site.name) + "</b><span>" + esc(site.org) + " · " + esc(site.town) + "</span></th>" +
+        var lv = (site.fit.levels || []).map(function (c) { return LEVEL[c].short; }).join(" · ");
+        return "<tr><th scope=\"row\" class=\"site-name\"><b>" + esc(site.name) + "</b><span>" + esc(site.org) + " · " + esc(site.town) + "</span><span class=\"grid-lv\">" + (lv ? "Levels " + esc(lv) : "Levels not on file") + (site.fit.excludes ? " · won’t take: " + esc(site.fit.excludes.join("; ")) : "") + "</span></th>" +
           cells + '<td class="upd-cell">' + upd + "</td></tr>";
       }).join("");
     }).join("");
@@ -373,6 +405,15 @@
   buildSeg("f-type", "f-type", TYPE_OPTS, "type");
   buildSeg("f-sex", "f-sex", SEX_OPTS, "sex");
   buildSeg("f-age", "f-age", AGE_OPTS, "age");
+  $("f-loca").innerHTML += S.sites.levels.map(function (l) { return '<option value="' + l[0] + '">' + esc(l[1] + " — " + l[2]) + "</option>"; }).join("");
+  // Picking a LOCA level also picks the matching bed type; staff can change it after.
+  var LOCA_TYPE = { wm4: "detox", wm37: "detox", "4": "residential", "37": "residential", "35": "residential", "25": "php", "21": "outpatient", "1": "outpatient" };
+  $("f-loca").addEventListener("change", function (e) {
+    state.loca = e.target.value;
+    state.type = LOCA_TYPE[state.loca] || "any";
+    syncSeg("f-type", "type");
+    render();
+  });
   $("f-search").addEventListener("input", function (e) { state.q = e.target.value.trim().toLowerCase(); render(); });
   $("f-mh").addEventListener("change", function (e) { state.mh = e.target.checked; render(); });
   $("f-fresh").addEventListener("change", function (e) { state.recentOnly = e.target.checked; render(); });

@@ -56,22 +56,18 @@
 
       // Valley Forge
       { id: "vfmc", org: "vfmc", name: "Valley Forge Medical Center", aliases: ["valley forge", "vfmc"], town: "Norristown", region: "eastern", population: "adult", services: ["SUD"], contact: "610-539-8500",
-        levels: ["4", "3.7"], tags: ["Medically complex OK: IV antibiotics, wound care, CHF, diabetes", "Pre-certification handled", "Hospital-level care"],
         beds: [{ type: "shared", covers: ["detox", "residential"], label: "detox or rehab" }] },
 
       // Pyramid Healthcare
       { id: "silvermist-pgh", org: "pyramid", name: "Silvermist Pittsburgh", aliases: ["silvermist pittsburgh"], town: "Pittsburgh area", region: "western", population: "adult", services: ["SUD", "MH"], contact: null,
-        tags: ["Mental health or substance use"],
         beds: [{ type: "residential", sexes: ["male"] }] },
       { id: "silvermist-pocono", org: "pyramid", name: "Silvermist Pocono", aliases: ["silvermist pocono"], town: "Pocono region", region: "eastern", population: "adult", services: ["MH"], contact: null,
-        tags: ["Mental health only"],
         beds: [{ type: "residential", sexes: ["female"] }] },
       { id: "providence-house", org: "pyramid", name: "Providence House", aliases: ["providence house"], town: "Location not stated", region: "unknown", population: "adult", services: ["SUD"], contact: null,
         beds: [{ type: "php", sexes: ["any"] }] },
 
       // Gaiser
       { id: "gaiser", org: "gaiser", name: "Gaiser Center", fullName: "Ellen O’Brien Gaiser Center", aliases: ["gaiser"], town: "Butler", region: "western", population: "adult", services: ["SUD"], contact: "724-287-8205",
-        tags: ["MAT", "Gender-specific programs", "Most Western PA SCA funding"],
         beds: [{ type: "residential", sexes: ["male", "female"] }, { type: "outpatient", mode: "yesno" }] },
 
       // SpiritLife — emails give no count; levels from the Bed Search Worksheet (WM 3.7, 3.5).
@@ -87,6 +83,47 @@
       unknown: { label: "Location not stated", order: 4 }
     }
   };
+
+
+  /*
+   * fit: who each site takes, from the Bed Search Worksheet ("worksheet"),
+   * provider emails ("email") and provider websites ("website").
+   *   levels   ASAM levels the site accepts — match to the client's LOCA recommendation
+   *   serves   population as the provider describes it
+   *   excludes who they don't take        requires  admission prerequisites
+   *   takes    notable clients they do take   payer   funding notes
+   *   known    which of pregnancy / moud / medical / legal is on file
+   * Anything not listed here is NOT on file — the board says so.
+   */
+  var WDR = { levels: ["wm37", "35", "25"], levelsNote: "From the worksheet’s White Deer Run entry (ALDA; 2.5 listed as SOP)", source: ["worksheet", "website"] };
+  var FIT = {
+    "bowling-green": { serves: "Adults", source: ["email"] },
+    "bradford": { serves: "Adults", source: ["email"] },
+    "cove-forge": { serves: "Adults", notes: ["Direct admission requests by email until about 9 PM"], source: ["email", "worksheet"] },
+    "allenwood": Object.assign({ serves: "Adults" }, WDR),
+    "lehigh": Object.assign({ serves: "Adults" }, WDR),
+    "york": Object.assign({ serves: "Adults" }, WDR),
+    "mt-zion": Object.assign({ serves: "Adults" }, WDR),
+    "york-php": Object.assign({ serves: "Adults" }, WDR),
+    "pmrc": { serves: "Adults", source: ["email"] },
+    "hcrc": { serves: "Adults", source: ["email"] },
+    "hcrc-adol": { serves: "Adolescents only", source: ["email"] },
+    "upmc-mercy": { levels: ["wm4"], takes: ["Medically managed detox (hospital unit, 18 beds)"], known: ["medical"], source: ["worksheet"] },
+    "upmc-mckeesport": { levels: ["wm4", "4"], takes: ["People who need medical stabilization"], requires: ["Rehab: already through detox, relapsed, and needs medical treatment"], known: ["medical"], source: ["worksheet"] },
+    "vfmc": { levels: ["wm4", "4", "37"], takes: ["Medically complex: IV antibiotics, wound care, CHF, diabetes, hypertension"], payer: "Pre-certification handled by VFMC", known: ["medical"], source: ["email"] },
+    "silvermist-pgh": { serves: "Adult men", takes: ["Mental health or substance use"], payer: "Private insurance only", source: ["email", "worksheet"] },
+    "silvermist-pocono": { serves: "Adult women", excludes: ["Substance use — mental health beds only"], payer: "Silvermist is listed as private insurance only — confirm", source: ["email", "worksheet"] },
+    "providence-house": { levels: ["25"], takes: ["Substance use"], source: ["email"] },
+    "gaiser": { levels: ["35", "21", "1"], serves: "Adults · separate men’s and women’s programs", takes: ["MAT"], payer: "Most Western PA SCA funding", known: ["moud"], source: ["email", "worksheet"] },
+    "spiritlife": { levels: ["wm37", "35"], takes: ["Transportation offered"], source: ["worksheet", "email"] }
+  };
+  OPEN_BEDS_SITES.sites.forEach(function (s) { s.fit = FIT[s.id] || { source: [] }; });
+  OPEN_BEDS_SITES.levels = [
+    ["wm4", "WM 4", "Medically managed withdrawal"], ["wm37", "WM 3.7", "Medically monitored withdrawal"],
+    ["4", "4", "Medically managed inpatient"], ["37", "3.7", "Medically monitored inpatient"],
+    ["35", "3.5", "Clinically managed residential"], ["25", "2.5", "Partial hospitalization (PHP)"],
+    ["21", "2.1", "Intensive outpatient (IOP)"], ["1", "1", "Outpatient"]
+  ];
 
   if (typeof module !== "undefined" && module.exports) module.exports = OPEN_BEDS_SITES;
   else root.OPEN_BEDS_SITES = OPEN_BEDS_SITES;
