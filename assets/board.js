@@ -1,48 +1,22 @@
-/* Open Beds — dashboard logic. Plain JS, no build step. */
+/* Open Beds — public board. Reads the store; re-renders when any source updates it. */
 (function () {
   "use strict";
 
-  var D = window.OPEN_BEDS;
-  var BOARD = new Date(D.boardTime);
-  var TZ = "America/New_York";
-
+  var S = window.OpenBedsStore, OB = window.OB, esc = OB.esc;
+  var REGIONS = S.sites.regions;
   var BED_TYPES = ["detox", "residential", "php", "outpatient"];
   var TYPE_OPTS = [["any", "Any type"], ["detox", "Detox"], ["residential", "Residential"], ["php", "PHP"], ["outpatient", "Outpatient"]];
   var SEX_OPTS = [["any", "Any"], ["male", "Male"], ["female", "Female"]];
   var AGE_OPTS = [["adult", "Adults"], ["adolescent", "Adolescents"], ["all", "All"]];
-  var TYPE_LABEL = { detox: "Detox", residential: "Residential", php: "PHP", outpatient: "Outpatient" };
+  var TYPE_LABEL = OB.TYPE_LABEL;
   var SEX_SHORT = { male: "M", female: "F", any: "" };
 
-  var state = { type: "any", sex: "any", age: "adult", q: "", mh: false, todayOnly: false, view: "find", sort: "region" };
-
-  var reportById = {};
-  D.reports.forEach(function (r) { reportById[r.id] = r; });
-
-  // ---------- helpers ----------
-  function esc(s) {
-    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
-      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
-    });
-  }
+  var state = { type: "any", sex: "any", age: "adult", q: "", mh: false, recentOnly: false, view: "find", sort: "region" };
   function $(id) { return document.getElementById(id); }
-  function dayKey(d) { return d.toLocaleDateString("en-US", { timeZone: TZ }); }
-  function timeOf(d) { return d.toLocaleTimeString("en-US", { timeZone: TZ, hour: "numeric", minute: "2-digit" }); }
+  function plural(n, a, b) { return OB.plural(n, a, b); }
 
-  function freshness(site) {
-    var sent = new Date(reportById[site.report].sentAt);
-    var hours = (BOARD - sent) / 36e5;
-    var yesterday = new Date(BOARD.getTime() - 864e5);
-    var when;
-    if (dayKey(sent) === dayKey(BOARD)) when = "Today " + timeOf(sent);
-    else if (dayKey(sent) === dayKey(yesterday)) when = "Yesterday " + timeOf(sent);
-    else when = sent.toLocaleDateString("en-US", { timeZone: TZ, month: "short", day: "numeric" }) + " " + timeOf(sent);
-    var level = dayKey(sent) === dayKey(BOARD) ? "fresh" : hours < 48 ? "aging" : "stale";
-    var age = hours < 1 ? "under 1 h old" : Math.round(hours) + " h old";
-    return { when: when, level: level, age: age, today: level === "fresh", sent: sent };
-  }
-
-  // Availability of one bed type for one sex at one site.
-  // state: open | full | avail (no count) | na (marked not available) | nr (not in report)
+  // ---------- availability ----------
+  // state: open | full | avail (no count) | na (marked NA) | nr (not in report)
   function avail(site, type, sex) {
     var c = site.counts && site.counts[type];
     if (c) {
@@ -68,14 +42,15 @@
     return { state: "nr" };
   }
 
-  // Availability across all bed types (no double counting of shared counts).
+  function isNoCount(site) { return (site.qualitative || []).some(function (q) { return q.types.indexOf("unknown") > -1; }); }
+
   function availAny(site, sex) {
     var per = [], n = 0, unstated = 0, hasAvail = false, hasFull = false, hasNa = false, notes = [];
     BED_TYPES.forEach(function (t) {
       if (site.shared && site.shared.types.indexOf(t) > -1) return;
       var a = avail(site, t, sex);
       if (a.state === "open") { n += a.n; if (a.note) unstated += a.n; per.push({ type: t, n: a.n, parts: a.parts }); if (a.note && notes.indexOf(a.note) < 0) notes.push(a.note); }
-      else if (a.state === "avail") { hasAvail = true; if (a.label && notes.indexOf(a.label) < 0 && (site.qualitative || []).every(function (q) { return q.types.indexOf("unknown") < 0; })) per.push({ type: t, label: "accepting" }); }
+      else if (a.state === "avail") { hasAvail = true; if (!isNoCount(site)) per.push({ type: t, label: "accepting" }); }
       else if (a.state === "full") hasFull = true;
       else if (a.state === "na") hasNa = true;
     });
@@ -85,40 +60,38 @@
       per.push({ type: "shared", n: site.shared.open, label: site.shared.label });
       if (sex !== "any") notes.push("Sex not stated");
     }
-    var stateName = n > 0 ? "open" : hasAvail ? "avail" : hasFull ? "full" : hasNa ? "na" : "nr";
     var label = null;
     (site.qualitative || []).forEach(function (q) { if (q.types.indexOf("unknown") > -1) label = q.label; });
-    return { state: stateName, n: n, unstated: unstated, per: per, notes: notes, label: label };
+    return { state: n > 0 ? "open" : hasAvail ? "avail" : hasFull ? "full" : hasNa ? "na" : "nr", n: n, unstated: unstated, per: per, notes: notes, label: label };
   }
 
-  // Beds counted for the chosen sex only because the report didn't split by sex.
   function unstatedOf(a) {
     if (state.sex === "any" || a.state !== "open") return 0;
     if (a.unstated !== undefined) return a.unstated;
     return a.note ? a.n : 0;
   }
-  function plural(n, one, many) { return n + " " + (n === 1 ? one : (many || one + "s")); }
-
-  function availFor(site) { return state.type === "any" ? availAny(site, state.sex) : avail(site, state.type, state.sex); }
+  function availFor(site) {
+    if (site.noReport) return { state: "none" };
+    return state.type === "any" ? availAny(site, state.sex) : avail(site, state.type, state.sex);
+  }
 
   function passesFilters(site) {
     if (state.age !== "all" && site.population !== state.age) return false;
     if (!state.mh && site.services.indexOf("SUD") < 0) return false;
-    if (state.todayOnly && !freshness(site).today) return false;
+    if (state.recentOnly && (site.noReport || OB.when(site.report.receivedAt).hours >= 24)) return false;
     if (state.q) {
       var hay = [site.name, site.fullName, site.org, site.town].join(" ").toLowerCase();
       if (hay.indexOf(state.q) < 0) return false;
     }
     return true;
   }
-
-  function regionOrder(site) { return D.regions[site.region].order; }
-  function regionLabel(site) { return D.regions[site.region].label; }
+  function regionOrder(site) { return REGIONS[site.region].order; }
+  function regionLabel(site) { return REGIONS[site.region].label; }
 
   // ---------- controls ----------
   function buildSeg(containerId, name, opts, key) {
     var el = $(containerId);
-    el.innerHTML = opts.map(function (o, i) {
+    el.innerHTML = opts.map(function (o) {
       var id = name + "-" + o[0];
       return '<input type="radio" name="' + name + '" id="' + id + '" value="' + o[0] + '"' + (state[key] === o[0] ? " checked" : "") + '>' +
         '<label for="' + id + '">' + esc(o[1]) + "</label>";
@@ -130,11 +103,12 @@
     if (el) el.checked = true;
   }
 
-  // ---------- render: tiles ----------
+  // ---------- tiles ----------
   function renderTiles(sites) {
     function sum(type) {
       var n = 0, s = 0, u = 0;
       sites.forEach(function (site) {
+        if (site.noReport) return;
         var a = avail(site, type, state.sex);
         if (a.state !== "open" || a.shared) return;
         if (a.note) u += a.n; else { n += a.n; s++; }
@@ -144,10 +118,11 @@
     var dx = sum("detox"), rs = sum("residential"), ph = sum("php");
     var sharedN = 0, sharedS = 0, op = 0, noCount = 0;
     sites.forEach(function (site) {
+      if (site.noReport) return;
       if (site.shared) { sharedN += site.shared.open; sharedS++; }
       var o = avail(site, "outpatient", state.sex);
-      if ((o.state === "open" || o.state === "avail") && !(site.qualitative || []).some(function (q) { return q.types.indexOf("unknown") > -1; })) op++;
-      if ((site.qualitative || []).some(function (q) { return q.types.indexOf("unknown") > -1; })) noCount++;
+      if ((o.state === "open" || o.state === "avail") && !isNoCount(site)) op++;
+      if (isNoCount(site)) noCount++;
     });
     var sexWord = state.sex === "any" ? "" : (state.sex === "male" ? " · men" : " · women");
     function sub(x) { return plural(x.s, "site") + " with a count" + (x.u ? " · +" + x.u + " sex not stated" : ""); }
@@ -159,8 +134,8 @@
       tile("detox", dx.n, "Detox beds open" + sexWord, sub(dx)) +
       tile("residential", rs.n, "Residential beds open" + sexWord, sub(rs)) +
       tile("php", ph.n, "PHP slots open" + sexWord, sub(ph)) +
-      '<div class="tile note"><span class="n">' + sharedN + '</span><span class="l">Detox or rehab, not split</span><span class="s">' + plural(sharedS, "hospital site") + " · one shared count" + (state.sex !== "any" ? ", sex not stated" : "") + "</span></div>" +
-      tile("outpatient", op, "Outpatient accepting", "Sites saying yes, no count") +
+      '<div class="tile note"><span class="n">' + sharedN + '</span><span class="l">Detox or rehab, not split</span><span class="s">' + plural(sharedS, "site") + " · one shared count" + (state.sex !== "any" ? ", sex not stated" : "") + "</span></div>" +
+      tile("outpatient", op, "Outpatient accepting", "Sites saying yes") +
       '<div class="tile note"><span class="n">' + noCount + '</span><span class="l">“Beds available”, no count</span><span class="s">Call for type and number</span></div>';
     Array.prototype.forEach.call(document.querySelectorAll("#tiles button.tile"), function (b) {
       b.addEventListener("click", function () {
@@ -173,7 +148,7 @@
     });
   }
 
-  // ---------- render: find a bed ----------
+  // ---------- find a bed ----------
   function countLabel(a) {
     var sex = state.sex === "any" || unstatedOf(a) === a.n ? "" : (state.sex === "male" ? " · male" : " · female");
     if (state.type === "any") return "open beds" + sex;
@@ -195,8 +170,7 @@
     } else if (a.parts && a.parts.length) {
       a.parts.forEach(function (p) { out.push('<span class="pill strong">' + p.n + " " + (p.sex === "male" ? "male" : "female") + "</span>"); });
     }
-    if (a.state === "avail" && a.label) out.push('<span class="pill">' + esc(a.label) + "</span>");
-    else if (state.type === "any" && a.label) out.push('<span class="pill">' + esc(a.label) + "</span>");
+    if (a.label && (a.state === "avail" || state.type === "any")) out.push('<span class="pill">' + esc(a.label) + "</span>");
     if (a.note) out.push('<span class="pill warn">' + esc(a.note) + "</span>");
     (a.notes || []).forEach(function (n) { out.push('<span class="pill warn">' + esc(n) + "</span>"); });
     if (state.type === "any" && site.shared && state.sex === "any") out.push('<span class="pill warn">Not split between detox and rehab</span>');
@@ -210,9 +184,15 @@
 
   var PHONE_SVG = '<svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2Z"/></svg>';
 
+  function sourceDetail(site) {
+    var r = site.report;
+    if (r.source === "email") return "Parsed from a provider email (" + esc(r.by.replace("Email from ", "")) + ").";
+    if (r.source === "form") return "Submitted on the provider update form" + (r.by && r.by !== "Provider form" ? " by " + esc(r.by) : "") + ".";
+    return "Updated by DHS staff" + (r.reason ? ": “" + esc(r.reason) + "”" : "") + ".";
+  }
+
   function card(site, a) {
-    var f = freshness(site);
-    var rep = reportById[site.report];
+    var f = OB.when(site.report.receivedAt);
     var box;
     if (a.state === "open") box = '<div class="count open"><b>' + a.n + "</b><span>" + esc(countLabel(a)) + "</span></div>";
     else if (a.state === "avail") box = '<div class="count avail"><b>Available</b><span>no count given</span></div>';
@@ -224,15 +204,15 @@
       '<div class="site"><h3>' + esc(site.name) + (site.fullName && site.fullName !== site.name ? ' <span class="full-name">' + esc(site.fullName) + "</span>" : "") + "</h3>" +
       '<div class="where">' + esc(site.org) + " · " + esc(site.town) + " · " + esc(regionLabel(site)) + "</div>" +
       '<div class="split">' + splitPills(site, a) + "</div></div>" +
-      '<div class="side"><span class="fr ' + f.level + '" title="' + esc(f.age) + '">' + esc(f.when) + "</span>" + call + "</div>" +
-      '<details class="src"><summary>From the ' + esc(rep.organization) + " email</summary><p>" + esc(rep.gives) + "</p><p>Format: " + esc(rep.format) + ".</p></details>" +
+      '<div class="side"><span class="fr ' + f.level + '" title="' + esc(f.age) + '">' + esc(f.label) + "</span>" + OB.sourceChip(site.report.source) + call + "</div>" +
+      '<details class="src"><summary>Where this count came from</summary><p>' + sourceDetail(site) + " Received " + esc(f.label) + " (" + esc(f.age) + ").</p></details>" +
       "</article>";
   }
 
   function sorter(a, b) {
     var sa = a.site, sb = b.site, na = a.a.n || 0, nb = b.a.n || 0;
     if (state.sort === "count") return (nb - na) || (regionOrder(sa) - regionOrder(sb));
-    if (state.sort === "recent") return (freshness(sb).sent - freshness(sa).sent) || (nb - na);
+    if (state.sort === "recent") return (new Date(sb.report.receivedAt) - new Date(sa.report.receivedAt)) || (nb - na);
     return (regionOrder(sa) - regionOrder(sb)) || (nb - na);
   }
 
@@ -241,7 +221,8 @@
     var open = rows.filter(function (r) { return r.a.state === "open"; }).sort(sorter);
     var av = rows.filter(function (r) { return r.a.state === "avail"; }).sort(sorter);
     var full = rows.filter(function (r) { return r.a.state === "full"; }).sort(sorter);
-    var other = rows.length - open.length - av.length - full.length;
+    var none = rows.filter(function (r) { return r.a.state === "none"; });
+    var other = rows.length - open.length - av.length - full.length - none.length;
     var beds = open.reduce(function (t, r) { return t + r.a.n; }, 0);
     var unst = open.reduce(function (t, r) { return t + unstatedOf(r.a); }, 0);
 
@@ -268,11 +249,14 @@
     if (full.length) {
       html += '<details class="more"><summary>Full today (' + full.length + ")</summary><div class=\"cards\">" + full.map(function (r) { return card(r.site, r.a); }).join("") + "</div></details>";
     }
-    if (other) html += '<p class="footnote">' + other + " other " + (other === 1 ? "site" : "sites") + " in today’s reports don’t offer this or didn’t mention it.</p>";
+    var foot = [];
+    if (other) foot.push(plural(other, "other site") + " in recent reports " + (other === 1 ? "doesn’t" : "don’t") + " offer this or didn’t mention it.");
+    if (none.length) foot.push(plural(none.length, "site") + " " + (none.length === 1 ? "hasn’t" : "haven’t") + " reported yet: " + none.map(function (r) { return esc(r.site.name); }).join(", ") + ".");
+    if (foot.length) html += '<p class="footnote">' + foot.join(" ") + "</p>";
     $("view-find").innerHTML = html;
   }
 
-  // ---------- render: all sites grid ----------
+  // ---------- all sites grid ----------
   function gridCell(a) {
     if (a.state === "open") {
       var small = a.parts && a.parts.length > 1 ? a.parts.map(function (p) { return p.n + " " + SEX_SHORT[p.sex]; }).join(" · ") : a.note ? "sex not stated" : "open";
@@ -287,71 +271,74 @@
   function renderGrid(sites) {
     var byRegion = {};
     sites.forEach(function (s) { (byRegion[s.region] = byRegion[s.region] || []).push(s); });
-    var regions = Object.keys(byRegion).sort(function (a, b) { return D.regions[a].order - D.regions[b].order; });
+    var regions = Object.keys(byRegion).sort(function (a, b) { return REGIONS[a].order - REGIONS[b].order; });
     var cols = BED_TYPES.map(function (t) {
       return '<th scope="col" class="num' + (state.type === t ? " sel" : "") + '">' + TYPE_LABEL[t] + "</th>";
     }).join("");
     var body = regions.map(function (r) {
-      var head = '<tr class="region-row"><th scope="rowgroup" colspan="7">' + esc(D.regions[r].label) + " · " + plural(byRegion[r].length, "site") + "</th></tr>";
+      var head = '<tr class="region-row"><th scope="rowgroup" colspan="6">' + esc(REGIONS[r].label) + " · " + plural(byRegion[r].length, "site") + "</th></tr>";
       return head + byRegion[r].map(function (site) {
-        var f = freshness(site);
-        var cells = "";
-        var unknown = (site.qualitative || []).filter(function (q) { return q.types.indexOf("unknown") > -1; })[0];
-        if (unknown) {
-          cells = '<td class="c" colspan="4"><span class="cell avail wide"><b>Beds available</b><small>type and count not given</small></span></td>';
+        var cells = "", upd;
+        if (site.noReport) {
+          cells = '<td class="c" colspan="4"><span class="cell nr wide"><b>No report yet</b><small>call to check</small></span></td>';
+          upd = '<span class="fr stale">No report</span>';
         } else {
-          var i = 0;
-          while (i < BED_TYPES.length) {
-            var t = BED_TYPES[i];
-            if (site.shared && site.shared.types[0] === t) {
-              var span = site.shared.types.length;
-              cells += '<td class="c" colspan="' + span + '"><span class="cell open wide"><b>' + site.shared.open + "</b><small>" + esc(site.shared.label) + (state.sex !== "any" ? " · sex not stated" : "") + "</small></span></td>";
-              i += span;
-              continue;
+          var f = OB.when(site.report.receivedAt);
+          upd = '<span class="fr ' + f.level + '">' + esc(f.label) + "</span> " + OB.sourceChip(site.report.source);
+          if (isNoCount(site)) {
+            cells = '<td class="c" colspan="4"><span class="cell avail wide"><b>Beds available</b><small>type and count not given</small></span></td>';
+          } else {
+            var i = 0;
+            while (i < BED_TYPES.length) {
+              var t = BED_TYPES[i];
+              if (site.shared && site.shared.types[0] === t) {
+                var span = site.shared.types.length;
+                cells += '<td class="c" colspan="' + span + '"><span class="cell open wide"><b>' + site.shared.open + "</b><small>" + esc(site.shared.label) + (state.sex !== "any" ? " · sex not stated" : "") + "</small></span></td>";
+                i += span;
+                continue;
+              }
+              cells += '<td class="c">' + gridCell(avail(site, t, state.sex)) + "</td>";
+              i++;
             }
-            cells += '<td class="c">' + gridCell(avail(site, t, state.sex)) + "</td>";
-            i++;
           }
         }
         return "<tr><th scope=\"row\" class=\"site-name\"><b>" + esc(site.name) + "</b><span>" + esc(site.org) + " · " + esc(site.town) + "</span></th>" +
-          cells + '<td><span class="fr ' + f.level + '">' + esc(f.when) + "</span></td></tr>";
+          cells + '<td class="upd-cell">' + upd + "</td></tr>";
       }).join("");
     }).join("");
 
-    $("status").textContent = sites.length + " sites from " + new Set(sites.map(function (s) { return s.report; })).size + " reports" +
-      (state.sex === "any" ? "" : state.sex === "male" ? " · counts for men" : " · counts for women") + ".";
+    $("status").textContent = plural(sites.length, "site") + (state.sex === "any" ? "" : state.sex === "male" ? " · counts for men" : " · counts for women") + ".";
     $("view-grid").innerHTML = sites.length
-      ? '<div class="gridwrap"><table class="grid"><caption class="sr">Open beds by site and bed type</caption><thead><tr><th scope="col">Site</th>' + cols + '<th scope="col">Reported</th></tr></thead><tbody>' + body + "</tbody></table>" +
+      ? '<div class="gridwrap"><table class="grid"><caption class="sr">Open beds by site and bed type</caption><thead><tr><th scope="col">Site</th>' + cols + '<th scope="col">Last update</th></tr></thead><tbody>' + body + "</tbody></table>" +
         '<div class="legend"><span><span class="cell open"><b>6</b></span> open (M · F split where given)</span><span><span class="cell full"><b>Full</b></span> offered, 0 open</span><span><span class="cell na"><b>NA</b></span> marked NA by provider</span><span><span class="cell nr"><b>—</b></span> not in report</span><span><span class="cell avail"><b>Yes</b></span> available, no count</span></div></div>'
       : '<div class="empty">No sites match these filters.</div>';
   }
 
-  // ---------- render: daily reports ----------
-  var LVL = { "by-sex": "Count by type and sex", "by-type": "Count by type", "total-only": "Total only", "none": "No count" };
-  function renderReports() {
-    var reps = D.reports.slice().sort(function (a, b) { return new Date(b.sentAt) - new Date(a.sentAt); });
-    var today = reps.filter(function (r) { return dayKey(new Date(r.sentAt)) === dayKey(BOARD); }).length;
-    var bySex = reps.filter(function (r) { return r.specificity === "by-sex"; }).length;
+  // ---------- updates feed ----------
+  function renderUpdates() {
+    var reps = S.reports().filter(function (r) { return r.status === "published"; });
+    var last24 = reps.filter(function (r) { return OB.when(r.receivedAt).hours < 24; });
+    var bySource = { email: 0, form: 0, admin: 0 };
+    last24.forEach(function (r) { bySource[r.source]++; });
     var html = '<div class="cov">' +
-      '<div class="tile"><span class="n">' + today + " of " + reps.length + '</span><span class="l">Reported today</span><span class="s">The rest are from yesterday</span></div>' +
-      '<div class="tile"><span class="n">' + D.sites.length + '</span><span class="l">Sites covered</span><span class="s">One email can cover up to 11 sites</span></div>' +
-      '<div class="tile"><span class="n">' + bySex + " of " + reps.length + '</span><span class="l">Split by bed type and sex</span><span class="s">The detail staff need to place someone</span></div>' +
-      '<div class="tile"><span class="n">5</span><span class="l">Different email formats</span><span class="s">Table, one-liner, prose, two newsletters</span></div>' +
+      '<div class="tile"><span class="n">' + last24.length + '</span><span class="l">Updates in the last 24 h</span><span class="s">' + bySource.email + " email · " + bySource.form + " form · " + bySource.admin + " DHS</span></div>" +
+      '<div class="tile"><span class="n">' + S.boardSites().filter(function (s) { return !s.noReport && OB.when(s.report.receivedAt).hours < 24; }).length + " of " + S.sites.sites.length + '</span><span class="l">Sites current</span><span class="s">Updated in the last 24 h</span></div>' +
       "</div>";
-    html += reps.map(function (r) {
-      var sent = new Date(r.sentAt);
-      var f = dayKey(sent) === dayKey(BOARD) ? "fresh" : "aging";
-      var when = (f === "fresh" ? "Today " : "Yesterday ") + timeOf(sent);
-      return '<article class="rep"><div><h3>' + esc(r.organization) + '</h3><div class="sub">' + esc(r.sender) + "</div>" +
-        '<div class="split"><span class="fr ' + f + '">' + when + '</span><span class="lvl ' + r.specificity + '">' + LVL[r.specificity] + '</span><span class="pill">' + r.sites.length + (r.sites.length === 1 ? " site" : " sites") + "</span></div></div>" +
-        "<dl><dt>Format</dt><dd>" + esc(r.format) + "</dd><dt>Gives</dt><dd>" + esc(r.gives) + "</dd><dt>Missing</dt><dd>" + esc(r.missing) + "</dd><dt>Ingest</dt><dd>" + esc(r.ingest) + "</dd></dl></article>";
-    }).join("");
-    $("status").textContent = reps.length + " provider emails. Sorted newest first.";
-    $("view-reports").innerHTML = html;
+    html += '<div class="cards">' + reps.slice(0, 40).map(function (r) {
+      var f = OB.when(r.receivedAt);
+      var names = r.entries.filter(function (e) { return e.siteId; }).map(function (e) { return S.siteById[e.siteId] ? S.siteById[e.siteId].name : e.siteId; });
+      var org = r.orgId && S.orgById[r.orgId] ? S.orgById[r.orgId].short : "Unknown sender";
+      return '<article class="feed"><div class="feed-top"><b>' + esc(org) + "</b>" + OB.sourceChip(r.source) + '<span class="fr ' + f.level + '">' + esc(f.label) + "</span></div>" +
+        '<div class="feed-sites">' + esc(plural(names.length, "site")) + ": " + esc(names.join(", ")) + "</div>" +
+        (r.source === "admin" && r.reason ? '<div class="feed-note">“' + esc(r.reason) + "”</div>" : "") +
+        "</article>";
+    }).join("") + "</div>";
+    $("status").textContent = "Newest first. Every email, form submission and DHS edit that changed the board.";
+    $("view-updates").innerHTML = html;
   }
 
   // ---------- tabs ----------
-  var TABS = [["find", "tab-find", "view-find"], ["grid", "tab-grid", "view-grid"], ["reports", "tab-reports", "view-reports"]];
+  var TABS = [["find", "tab-find", "view-find"], ["grid", "tab-grid", "view-grid"], ["updates", "tab-updates", "view-updates"]];
   function setupTabs() {
     TABS.forEach(function (t, i) {
       var b = $(t[1]);
@@ -365,9 +352,11 @@
     });
   }
 
-  // ---------- main render ----------
   function render() {
-    var sites = D.sites.filter(passesFilters);
+    var all = S.boardSites();
+    var sites = all.filter(passesFilters);
+    var latest = all.filter(function (s) { return !s.noReport; }).map(function (s) { return new Date(s.report.receivedAt); }).sort(function (a, b) { return b - a; })[0];
+    $("board-meta").textContent = "Live · " + all.length + " sites · last update " + (latest ? OB.when(latest.toISOString()).label : "none");
     TABS.forEach(function (t) {
       var on = state.view === t[0];
       $(t[1]).setAttribute("aria-selected", on);
@@ -378,23 +367,18 @@
     renderTiles(sites);
     if (state.view === "find") renderFind(sites);
     else if (state.view === "grid") renderGrid(sites);
-    else renderReports();
+    else renderUpdates();
   }
 
-  function init() {
-    $("board-meta").textContent = "Board as of " + BOARD.toLocaleString("en-US", { timeZone: TZ, weekday: "short", month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }) +
-      " · " + D.reports.length + " provider reports · " + D.sites.length + " sites";
-    $("source-note").textContent = D.sourceNote;
-    buildSeg("f-type", "f-type", TYPE_OPTS, "type");
-    buildSeg("f-sex", "f-sex", SEX_OPTS, "sex");
-    buildSeg("f-age", "f-age", AGE_OPTS, "age");
-    $("f-search").addEventListener("input", function (e) { state.q = e.target.value.trim().toLowerCase(); render(); });
-    $("f-mh").addEventListener("change", function (e) { state.mh = e.target.checked; render(); });
-    $("f-fresh").addEventListener("change", function (e) { state.todayOnly = e.target.checked; render(); });
-    $("f-sort").addEventListener("change", function (e) { state.sort = e.target.value; render(); });
-    setupTabs();
-    render();
-  }
-
-  init();
+  buildSeg("f-type", "f-type", TYPE_OPTS, "type");
+  buildSeg("f-sex", "f-sex", SEX_OPTS, "sex");
+  buildSeg("f-age", "f-age", AGE_OPTS, "age");
+  $("f-search").addEventListener("input", function (e) { state.q = e.target.value.trim().toLowerCase(); render(); });
+  $("f-mh").addEventListener("change", function (e) { state.mh = e.target.checked; render(); });
+  $("f-fresh").addEventListener("change", function (e) { state.recentOnly = e.target.checked; render(); });
+  $("f-sort").addEventListener("change", function (e) { state.sort = e.target.value; render(); });
+  setupTabs();
+  S.subscribe(render);
+  setInterval(render, 60000);
+  render();
 })();

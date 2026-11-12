@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Open Beds — Update your beds</title>
+  <meta name="description" content="Providers: tell Pathways how many beds you have open today.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Crect width=%2716%27 height=%2716%27 rx=%273%27 fill=%27%23262673%27/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+  <a class="skip" href="#form-main">Skip to form</a>
+  <header class="topbar">
+    <div class="wrap topbar-inner">
+      <div class="brand">
+        <span class="brand-name">Open Beds</span>
+        <span class="brand-sub">Pathways · Allegheny County DHS</span>
+      </div>
+      <nav class="mainnav" aria-label="Main">
+        <a href="index.html">Bed board</a>
+        <a href="update.html" aria-current="page">Update your beds</a>
+        <a href="admin.html">Admin</a>
+      </nav>
+    </div>
+  </header>
+  <div class="demo-bar" role="note"><div class="wrap"><b>Prototype — don’t enter real availability.</b> Submissions are saved only in this browser and are not sent to Pathways.</div></div>
+
+  <main class="wrap" id="form-main" tabindex="-1">
+    <section class="page-h">
+      <h1>Update your open beds</h1>
+      <p>Takes about a minute. Your counts show on Pathways’ bed board as soon as you submit, so intake staff can call you first.</p>
+    </section>
+
+    <div id="done" class="success" hidden tabindex="-1"></div>
+
+    <form id="upd" novalidate>
+      <div class="panel">
+        <div class="field" style="margin:0">
+          <label class="lbl" for="org">Your organization</label>
+          <select id="org" class="sel-in" style="max-width:420px"></select>
+          <span class="help">In production each provider gets a personal link, so this is filled in for you.</span>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Open beds right now</h2>
+        <p class="hint">Enter a number for each bed you offer — <b>0</b> if full, <b>NA</b> if you don’t offer it. Grey numbers are your last update. Leave a whole site blank to skip it.</p>
+        <div id="sites"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Who’s updating</h2>
+        <div class="row2">
+          <div class="field">
+            <label class="lbl" for="who">Your role</label>
+            <input id="who" class="input wide" type="text" autocomplete="organization-title" placeholder="e.g. Admissions coordinator">
+          </div>
+        </div>
+        <label class="toggle-row"><input type="checkbox" id="confirm"> <span>These counts are current as of now.</span></label>
+        <div class="err" id="form-err" role="alert" hidden></div>
+        <div class="btnrow">
+          <button type="submit" class="btn primary">Update the bed board</button>
+        </div>
+      </div>
+    </form>
+
+    <div class="panel">
+      <h2>Prefer email?</h2>
+      <p class="hint">Send your counts to the Pathways bed alias in this format and the board updates automatically. One “Site:” block per site.</p>
+      <pre class="tmpl" id="tmpl"></pre>
+    </div>
+  </main>
+
+  <script src="data/sites.js"></script>
+  <script src="data/sample-emails.js"></script>
+  <script src="assets/parser.js"></script>
+  <script src="assets/store.js"></script>
+  <script src="assets/common.js"></script>
+  <script src="assets/editor.js"></script>
+  <script src="assets/update.js"></script>
+</body>
+</html>

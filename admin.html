@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Open Beds — Admin</title>
+  <meta name="description" content="DHS admin for the Open Beds board: email inbox, site updates and activity.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Crect width=%2716%27 height=%2716%27 rx=%273%27 fill=%27%23262673%27/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+  <a class="skip" href="#admin-main">Skip to content</a>
+  <header class="topbar">
+    <div class="wrap topbar-inner">
+      <div class="brand">
+        <span class="brand-name">Open Beds</span>
+        <span class="brand-sub">Pathways · Allegheny County DHS</span>
+      </div>
+      <nav class="mainnav" aria-label="Main">
+        <a href="index.html">Bed board</a>
+        <a href="update.html">Update your beds</a>
+        <a href="admin.html" aria-current="page">Admin</a>
+      </nav>
+    </div>
+  </header>
+  <div class="demo-bar" role="note"><div class="wrap">Prototype admin — no sign-in, changes save only in this browser. In production this page sits behind county sign-in.</div></div>
+
+  <main class="wrap" id="admin-main" tabindex="-1">
+    <section class="page-h">
+      <h1>Admin</h1>
+      <p id="admin-meta"></p>
+    </section>
+
+    <div class="viewbar">
+      <div class="tabs" role="tablist" aria-label="Admin sections">
+        <button type="button" role="tab" id="t-inbox" aria-controls="p-inbox" aria-selected="true">Email inbox<span class="badge" id="review-badge" hidden></span></button>
+        <button type="button" role="tab" id="t-sites" aria-controls="p-sites" aria-selected="false" tabindex="-1">Sites</button>
+        <button type="button" role="tab" id="t-activity" aria-controls="p-activity" aria-selected="false" tabindex="-1">Activity</button>
+        <button type="button" role="tab" id="t-settings" aria-controls="p-settings" aria-selected="false" tabindex="-1">Settings</button>
+      </div>
+    </div>
+    <p class="status" id="a-status" aria-live="polite"></p>
+
+    <section id="p-inbox" role="tabpanel" aria-labelledby="t-inbox">
+      <div class="admin-grid">
+        <div class="main-col">
+          <div class="seg" id="mail-filter" role="radiogroup" aria-label="Show emails"></div>
+          <div id="mail-list" style="margin-top:12px"></div>
+        </div>
+        <aside class="side-col panel" style="margin-top:0" aria-labelledby="sim-h">
+          <h2 id="sim-h">Simulate an email to the alias</h2>
+          <p class="hint">Stands in for the future alias. Recognized senders publish automatically; anything the parser isn’t sure of waits for review here.</p>
+          <div class="field">
+            <label class="lbl" for="sim-example">Load an example</label>
+            <select id="sim-example" class="sel-in"></select>
+          </div>
+          <div class="field"><label class="lbl" for="sim-from">From</label><input id="sim-from" class="input wide" type="email" autocomplete="off"></div>
+          <div class="field"><label class="lbl" for="sim-subject">Subject</label><input id="sim-subject" class="input wide" type="text" autocomplete="off"></div>
+          <div class="field"><label class="lbl" for="sim-body">Body</label><textarea id="sim-body" class="input wide" rows="8"></textarea></div>
+          <div class="btnrow"><button type="button" class="btn primary" id="sim-send">Receive email</button></div>
+          <div id="sim-result" role="status"></div>
+        </aside>
+      </div>
+    </section>
+
+    <section id="p-sites" role="tabpanel" aria-labelledby="t-sites" hidden>
+      <label class="check" style="margin-bottom:10px"><input type="checkbox" id="stale-only"> Only sites not updated in 24 hours</label>
+      <div class="gridwrap"><table class="sitetbl"><caption class="sr">Sites and their latest update</caption>
+        <thead><tr><th scope="col">Site</th><th scope="col">Last update</th><th scope="col">Current counts</th><th scope="col"><span class="sr">Action</span></th></tr></thead>
+        <tbody id="site-rows"></tbody></table></div>
+    </section>
+
+    <section id="p-activity" role="tabpanel" aria-labelledby="t-activity" hidden>
+      <div class="gridwrap"><table class="sitetbl"><caption class="sr">All updates, newest first</caption>
+        <thead><tr><th scope="col">Received</th><th scope="col">Source</th><th scope="col">From</th><th scope="col">Sites</th><th scope="col">Status</th></tr></thead>
+        <tbody id="act-rows"></tbody></table></div>
+    </section>
+
+    <section id="p-settings" role="tabpanel" aria-labelledby="t-settings" hidden>
+      <div class="panel">
+        <h2>Email publishing</h2>
+        <label class="toggle-row"><input type="checkbox" id="set-auto"> <span><b>Publish recognized emails automatically.</b> Emails from unknown senders, or with counts the parser can’t place, always wait for review.</span></label>
+      </div>
+      <div class="panel">
+        <h2>Known senders</h2>
+        <p class="hint">An email is matched to a provider by its sender’s domain.</p>
+        <div class="gridwrap"><table class="sitetbl" style="min-width:0"><thead><tr><th scope="col">Provider</th><th scope="col">Sender domains</th><th scope="col">Sites</th></tr></thead><tbody id="sender-rows"></tbody></table></div>
+      </div>
+      <div class="panel">
+        <h2>Demo data</h2>
+        <p class="hint">Clears everything in this browser and reloads the 7 sample emails.</p>
+        <button type="button" class="btn danger" id="reset">Reset demo data</button>
+      </div>
+    </section>
+  </main>
+
+  <div class="dialog-wrap" id="dlg-wrap" hidden>
+    <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dlg-h" id="dlg"></div>
+  </div>
+
+  <script src="data/sites.js"></script>
+  <script src="data/sample-emails.js"></script>
+  <script src="assets/parser.js"></script>
+  <script src="assets/store.js"></script>
+  <script src="assets/common.js"></script>
+  <script src="assets/editor.js"></script>
+  <script src="assets/admin.js"></script>
+</body>
+</html>

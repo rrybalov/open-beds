@@ -1,48 +1,42 @@
 # Open Beds
 
-A daily open-bed board for Pathways intake staff in Allegheny County. It answers one question: **where can I send someone today?**
+A live open-bed board for Pathways intake staff in Allegheny County. It answers one question: **where can I send someone today?**
 
-This MVP is built only from what providers already send Pathways — daily bed-availability emails. It does not match clients to providers yet.
+Counts reach the board three ways:
+
+1. **Email.** Providers email their daily counts to a Pathways alias and the board updates automatically.
+2. **Provider form.** Providers who'd rather not email fill in a one-minute form.
+3. **DHS admin.** Staff enter counts from phone calls, correct mistakes and review emails the parser isn't sure about.
+
+## Pages
+
+| Page | For | What it does |
+|---|---|---|
+| [`index.html`](index.html) | Pathways intake staff | **Find a bed** (filter by type, sex, age; nearest first), **All sites** grid, **Updates** feed |
+| [`update.html`](update.html) | Providers | Enter open beds per site. A personal link (`update.html?org=gaiser`) preselects the provider. |
+| [`admin.html`](admin.html) | DHS staff | **Email inbox** with review queue and an email simulator, **Sites** with manual updates, **Activity** log, **Settings** |
 
 ## Run it
 
-No build step. Open `index.html` in a browser, or publish with GitHub Pages (Settings → Pages → Deploy from branch → `main`, `/ (root)`).
+No build step. Serve the folder (`python3 -m http.server`) or open `index.html`. On GitHub Pages: Settings → Pages → Deploy from a branch → `main` / root.
 
-## What’s here
+**Demo mode:** data lives in your browser, seeded from 7 real provider emails (Nov 2–3, 2026) re-timed to today. Submit the form or simulate an email in one tab and the board updates in another. Admin → Settings → Reset demo data starts over.
+
+## Files
 
 | Path | What it is |
 |---|---|
-| `index.html` | The dashboard |
-| `assets/app.js` | Filtering, views and rendering (plain JS) |
-| `assets/styles.css` | ACDHS design system tokens and layout (Roboto) |
-| `data/reports.js` | The 7 sample emails, normalized to sites and bed types |
-| `docs/email-aggregation.md` | The emails side by side, with totals |
-| `docs/mvp-recommendations.md` | What the board should do, and how counts should get in |
+| `data/sites.js` | Providers, sites, sender domains and each site's bed layout |
+| `data/sample-emails.js` | The 7 sample emails as text (names removed), plus 2 test cases |
+| `assets/parser.js` | Email → per-site counts. Runs in the browser and in Node. |
+| `assets/store.js` | The update log (demo adapter). The only file that changes for production. |
+| `assets/board.js` · `update.js` · `admin.js` | The three pages |
+| `assets/editor.js` · `common.js` | Shared bed-count editor and helpers |
+| `tests/parser.test.js` | `node tests/parser.test.js` — parser checked against all 7 emails |
+| `docs/architecture.md` | Sources, email alias options, API, security |
+| `docs/email-aggregation.md` | The 7 emails side by side, with totals |
+| `docs/mvp-recommendations.md` | Board design recommendations |
 
-## The board
+## Privacy
 
-- **Find a bed** — filter by bed type, sex and age; see sites with open beds, nearest region first.
-- **All sites** — every site × detox / residential / PHP / outpatient.
-- **Daily reports** — each email: what it gave, what it left out, how to ingest it.
-
-## Data model
-
-Each **site** has a profile (organization, town, region, population, services, admissions line) and the counts from its latest **report**:
-
-```js
-counts: {
-  detox:       { male: 6, female: 3 },   // number = open, 0 = full
-  residential: { male: "na", female: 0 }, // "na" = marked NA by provider
-  php:         { any: 1 }                 // any = sex not given
-}
-shared:      { types: ["detox", "residential"], open: 9, label: "detox or rehab" }
-qualitative: [{ types: ["unknown"], label: "Beds available this week" }]
-```
-
-A bed type that isn’t mentioned is shown as “not in report.”
-
-## Sample data
-
-Counts are from emails sent Nov 2–3, 2026, and the board is pinned to Nov 3, 2026, 2:00 PM so freshness reads correctly. Nothing is live.
-
-Staff names, personal emails and direct or cell numbers from the emails are **not** stored. This repository is public.
+This repository is public. It holds no client data, staff names, personal emails or direct lines. Only organization admissions numbers printed in the emails are kept. The real board should sit behind staff sign-in — see `docs/architecture.md`.
