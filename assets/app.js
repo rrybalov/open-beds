@@ -1,0 +1,400 @@
+/* Open Beds — dashboard logic. Plain JS, no build step. */
+(function () {
+  "use strict";
+
+  var D = window.OPEN_BEDS;
+  var BOARD = new Date(D.boardTime);
+  var TZ = "America/New_York";
+
+  var BED_TYPES = ["detox", "residential", "php", "outpatient"];
+  var TYPE_OPTS = [["any", "Any type"], ["detox", "Detox"], ["residential", "Residential"], ["php", "PHP"], ["outpatient", "Outpatient"]];
+  var SEX_OPTS = [["any", "Any"], ["male", "Male"], ["female", "Female"]];
+  var AGE_OPTS = [["adult", "Adults"], ["adolescent", "Adolescents"], ["all", "All"]];
+  var TYPE_LABEL = { detox: "Detox", residential: "Residential", php: "PHP", outpatient: "Outpatient" };
+  var SEX_SHORT = { male: "M", female: "F", any: "" };
+
+  var state = { type: "any", sex: "any", age: "adult", q: "", mh: false, todayOnly: false, view: "find", sort: "region" };
+
+  var reportById = {};
+  D.reports.forEach(function (r) { reportById[r.id] = r; });
+
+  // ---------- helpers ----------
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  function $(id) { return document.getElementById(id); }
+  function dayKey(d) { return d.toLocaleDateString("en-US", { timeZone: TZ }); }
+  function timeOf(d) { return d.toLocaleTimeString("en-US", { timeZone: TZ, hour: "numeric", minute: "2-digit" }); }
+
+  function freshness(site) {
+    var sent = new Date(reportById[site.report].sentAt);
+    var hours = (BOARD - sent) / 36e5;
+    var yesterday = new Date(BOARD.getTime() - 864e5);
+    var when;
+    if (dayKey(sent) === dayKey(BOARD)) when = "Today " + timeOf(sent);
+    else if (dayKey(sent) === dayKey(yesterday)) when = "Yesterday " + timeOf(sent);
+    else when = sent.toLocaleDateString("en-US", { timeZone: TZ, month: "short", day: "numeric" }) + " " + timeOf(sent);
+    var level = dayKey(sent) === dayKey(BOARD) ? "fresh" : hours < 48 ? "aging" : "stale";
+    var age = hours < 1 ? "under 1 h old" : Math.round(hours) + " h old";
+    return { when: when, level: level, age: age, today: level === "fresh", sent: sent };
+  }
+
+  // Availability of one bed type for one sex at one site.
+  // state: open | full | avail (no count) | na (marked not available) | nr (not in report)
+  function avail(site, type, sex) {
+    var c = site.counts && site.counts[type];
+    if (c) {
+      if (sex === "any") {
+        var keys = Object.keys(c).filter(function (k) { return typeof c[k] === "number"; });
+        if (!keys.length) return { state: "na" };
+        var n = keys.reduce(function (t, k) { return t + c[k]; }, 0);
+        var parts = keys.filter(function (k) { return k !== "any"; }).map(function (k) { return { sex: k, n: c[k] }; });
+        return { state: n > 0 ? "open" : "full", n: n, parts: parts };
+      }
+      var v = c[sex], note = null;
+      if (v === undefined && c.any !== undefined) { v = c.any; note = "Sex not stated in report"; }
+      if (v === undefined) return { state: "nr" };
+      if (v === "na") return { state: "na" };
+      return { state: v > 0 ? "open" : "full", n: v, note: note };
+    }
+    if (site.shared && site.shared.types.indexOf(type) > -1) {
+      return { state: site.shared.open > 0 ? "open" : "full", n: site.shared.open, shared: true,
+        note: "One count for " + site.shared.label + (sex !== "any" ? " · sex not stated" : "") };
+    }
+    var q = (site.qualitative || []).filter(function (x) { return x.types.indexOf(type) > -1 || x.types.indexOf("unknown") > -1; })[0];
+    if (q) return { state: "avail", label: q.label, note: sex !== "any" ? "Sex not stated" : null };
+    return { state: "nr" };
+  }
+
+  // Availability across all bed types (no double counting of shared counts).
+  function availAny(site, sex) {
+    var per = [], n = 0, unstated = 0, hasAvail = false, hasFull = false, hasNa = false, notes = [];
+    BED_TYPES.forEach(function (t) {
+      if (site.shared && site.shared.types.indexOf(t) > -1) return;
+      var a = avail(site, t, sex);
+      if (a.state === "open") { n += a.n; if (a.note) unstated += a.n; per.push({ type: t, n: a.n, parts: a.parts }); if (a.note && notes.indexOf(a.note) < 0) notes.push(a.note); }
+      else if (a.state === "avail") { hasAvail = true; if (a.label && notes.indexOf(a.label) < 0 && (site.qualitative || []).every(function (q) { return q.types.indexOf("unknown") < 0; })) per.push({ type: t, label: "accepting" }); }
+      else if (a.state === "full") hasFull = true;
+      else if (a.state === "na") hasNa = true;
+    });
+    if (site.shared) {
+      n += site.shared.open;
+      if (sex !== "any") unstated += site.shared.open;
+      per.push({ type: "shared", n: site.shared.open, label: site.shared.label });
+      if (sex !== "any") notes.push("Sex not stated");
+    }
+    var stateName = n > 0 ? "open" : hasAvail ? "avail" : hasFull ? "full" : hasNa ? "na" : "nr";
+    var label = null;
+    (site.qualitative || []).forEach(function (q) { if (q.types.indexOf("unknown") > -1) label = q.label; });
+    return { state: stateName, n: n, unstated: unstated, per: per, notes: notes, label: label };
+  }
+
+  // Beds counted for the chosen sex only because the report didn't split by sex.
+  function unstatedOf(a) {
+    if (state.sex === "any" || a.state !== "open") return 0;
+    if (a.unstated !== undefined) return a.unstated;
+    return a.note ? a.n : 0;
+  }
+  function plural(n, one, many) { return n + " " + (n === 1 ? one : (many || one + "s")); }
+
+  function availFor(site) { return state.type === "any" ? availAny(site, state.sex) : avail(site, state.type, state.sex); }
+
+  function passesFilters(site) {
+    if (state.age !== "all" && site.population !== state.age) return false;
+    if (!state.mh && site.services.indexOf("SUD") < 0) return false;
+    if (state.todayOnly && !freshness(site).today) return false;
+    if (state.q) {
+      var hay = [site.name, site.fullName, site.org, site.town].join(" ").toLowerCase();
+      if (hay.indexOf(state.q) < 0) return false;
+    }
+    return true;
+  }
+
+  function regionOrder(site) { return D.regions[site.region].order; }
+  function regionLabel(site) { return D.regions[site.region].label; }
+
+  // ---------- controls ----------
+  function buildSeg(containerId, name, opts, key) {
+    var el = $(containerId);
+    el.innerHTML = opts.map(function (o, i) {
+      var id = name + "-" + o[0];
+      return '<input type="radio" name="' + name + '" id="' + id + '" value="' + o[0] + '"' + (state[key] === o[0] ? " checked" : "") + '>' +
+        '<label for="' + id + '">' + esc(o[1]) + "</label>";
+    }).join("");
+    el.addEventListener("change", function (e) { state[key] = e.target.value; render(); });
+  }
+  function syncSeg(name, key) {
+    var el = document.querySelector('input[name="' + name + '"][value="' + state[key] + '"]');
+    if (el) el.checked = true;
+  }
+
+  // ---------- render: tiles ----------
+  function renderTiles(sites) {
+    function sum(type) {
+      var n = 0, s = 0, u = 0;
+      sites.forEach(function (site) {
+        var a = avail(site, type, state.sex);
+        if (a.state !== "open" || a.shared) return;
+        if (a.note) u += a.n; else { n += a.n; s++; }
+      });
+      return { n: n, s: s, u: u };
+    }
+    var dx = sum("detox"), rs = sum("residential"), ph = sum("php");
+    var sharedN = 0, sharedS = 0, op = 0, noCount = 0;
+    sites.forEach(function (site) {
+      if (site.shared) { sharedN += site.shared.open; sharedS++; }
+      var o = avail(site, "outpatient", state.sex);
+      if ((o.state === "open" || o.state === "avail") && !(site.qualitative || []).some(function (q) { return q.types.indexOf("unknown") > -1; })) op++;
+      if ((site.qualitative || []).some(function (q) { return q.types.indexOf("unknown") > -1; })) noCount++;
+    });
+    var sexWord = state.sex === "any" ? "" : (state.sex === "male" ? " · men" : " · women");
+    function sub(x) { return plural(x.s, "site") + " with a count" + (x.u ? " · +" + x.u + " sex not stated" : ""); }
+    function tile(type, n, l, s) {
+      return '<button type="button" class="tile" data-type="' + type + '" aria-pressed="' + (state.type === type) + '">' +
+        '<span class="n">' + n + '</span><span class="l">' + l + '</span><span class="s">' + s + "</span></button>";
+    }
+    $("tiles").innerHTML =
+      tile("detox", dx.n, "Detox beds open" + sexWord, sub(dx)) +
+      tile("residential", rs.n, "Residential beds open" + sexWord, sub(rs)) +
+      tile("php", ph.n, "PHP slots open" + sexWord, sub(ph)) +
+      '<div class="tile note"><span class="n">' + sharedN + '</span><span class="l">Detox or rehab, not split</span><span class="s">' + plural(sharedS, "hospital site") + " · one shared count" + (state.sex !== "any" ? ", sex not stated" : "") + "</span></div>" +
+      tile("outpatient", op, "Outpatient accepting", "Sites saying yes, no count") +
+      '<div class="tile note"><span class="n">' + noCount + '</span><span class="l">“Beds available”, no count</span><span class="s">Call for type and number</span></div>';
+    Array.prototype.forEach.call(document.querySelectorAll("#tiles button.tile"), function (b) {
+      b.addEventListener("click", function () {
+        var t = b.getAttribute("data-type");
+        state.type = state.type === t ? "any" : t;
+        state.view = "find";
+        syncSeg("f-type", "type");
+        render();
+      });
+    });
+  }
+
+  // ---------- render: find a bed ----------
+  function countLabel(a) {
+    var sex = state.sex === "any" || unstatedOf(a) === a.n ? "" : (state.sex === "male" ? " · male" : " · female");
+    if (state.type === "any") return "open beds" + sex;
+    if (a.shared) return "detox or rehab";
+    return TYPE_LABEL[state.type].toLowerCase() + sex;
+  }
+
+  function splitPills(site, a) {
+    var out = [];
+    if (state.type === "any") {
+      a.per.forEach(function (p) {
+        if (p.type === "shared") out.push('<span class="pill strong">' + p.n + " " + esc(p.label) + "</span>");
+        else if (p.label) out.push('<span class="pill strong">' + TYPE_LABEL[p.type] + " — " + esc(p.label) + "</span>");
+        else {
+          var detail = (p.parts && p.parts.length > 1) ? " (" + p.parts.map(function (x) { return x.n + " " + SEX_SHORT[x.sex]; }).join(" · ") + ")" : "";
+          out.push('<span class="pill strong">' + TYPE_LABEL[p.type] + " " + p.n + detail + "</span>");
+        }
+      });
+    } else if (a.parts && a.parts.length) {
+      a.parts.forEach(function (p) { out.push('<span class="pill strong">' + p.n + " " + (p.sex === "male" ? "male" : "female") + "</span>"); });
+    }
+    if (a.state === "avail" && a.label) out.push('<span class="pill">' + esc(a.label) + "</span>");
+    else if (state.type === "any" && a.label) out.push('<span class="pill">' + esc(a.label) + "</span>");
+    if (a.note) out.push('<span class="pill warn">' + esc(a.note) + "</span>");
+    (a.notes || []).forEach(function (n) { out.push('<span class="pill warn">' + esc(n) + "</span>"); });
+    if (state.type === "any" && site.shared && state.sex === "any") out.push('<span class="pill warn">Not split between detox and rehab</span>');
+    if (site.sexSplitInferred && (state.sex !== "any" || (a.parts && a.parts.length > 1) || state.type === "any")) out.push('<span class="pill warn">Male/female read from unlabeled columns</span>');
+    if (site.population === "adolescent") out.push('<span class="pill tag">Adolescent unit</span>');
+    if (site.levels) out.push('<span class="pill tag">Levels ' + site.levels.join(" · ") + "</span>");
+    (site.notes || []).forEach(function (n) { out.push('<span class="pill">' + esc(n) + "</span>"); });
+    (site.tags || []).forEach(function (t) { out.push('<span class="pill tag">' + esc(t) + "</span>"); });
+    return out.join("");
+  }
+
+  var PHONE_SVG = '<svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2Z"/></svg>';
+
+  function card(site, a) {
+    var f = freshness(site);
+    var rep = reportById[site.report];
+    var box;
+    if (a.state === "open") box = '<div class="count open"><b>' + a.n + "</b><span>" + esc(countLabel(a)) + "</span></div>";
+    else if (a.state === "avail") box = '<div class="count avail"><b>Available</b><span>no count given</span></div>';
+    else box = '<div class="count full"><b>Full</b><span>' + (state.type === "any" ? "all reported beds" : esc(countLabel(a))) + "</span></div>";
+    var call = site.contact
+      ? '<a class="call" href="tel:' + site.contact.replace(/[^0-9]/g, "") + '" aria-label="Call ' + esc(site.name) + " admissions, " + esc(site.contact) + '">' + PHONE_SVG + esc(site.contact) + "</a>"
+      : '<span class="nocall">Number in provider profile</span>';
+    return '<article class="card">' + box +
+      '<div class="site"><h3>' + esc(site.name) + (site.fullName && site.fullName !== site.name ? ' <span class="full-name">' + esc(site.fullName) + "</span>" : "") + "</h3>" +
+      '<div class="where">' + esc(site.org) + " · " + esc(site.town) + " · " + esc(regionLabel(site)) + "</div>" +
+      '<div class="split">' + splitPills(site, a) + "</div></div>" +
+      '<div class="side"><span class="fr ' + f.level + '" title="' + esc(f.age) + '">' + esc(f.when) + "</span>" + call + "</div>" +
+      '<details class="src"><summary>From the ' + esc(rep.organization) + " email</summary><p>" + esc(rep.gives) + "</p><p>Format: " + esc(rep.format) + ".</p></details>" +
+      "</article>";
+  }
+
+  function sorter(a, b) {
+    var sa = a.site, sb = b.site, na = a.a.n || 0, nb = b.a.n || 0;
+    if (state.sort === "count") return (nb - na) || (regionOrder(sa) - regionOrder(sb));
+    if (state.sort === "recent") return (freshness(sb).sent - freshness(sa).sent) || (nb - na);
+    return (regionOrder(sa) - regionOrder(sb)) || (nb - na);
+  }
+
+  function renderFind(sites) {
+    var rows = sites.map(function (s) { return { site: s, a: availFor(s) }; });
+    var open = rows.filter(function (r) { return r.a.state === "open"; }).sort(sorter);
+    var av = rows.filter(function (r) { return r.a.state === "avail"; }).sort(sorter);
+    var full = rows.filter(function (r) { return r.a.state === "full"; }).sort(sorter);
+    var other = rows.length - open.length - av.length - full.length;
+    var beds = open.reduce(function (t, r) { return t + r.a.n; }, 0);
+    var unst = open.reduce(function (t, r) { return t + unstatedOf(r.a); }, 0);
+
+    var what = (state.type === "any" ? "beds" : TYPE_LABEL[state.type].toLowerCase() + " beds") +
+      (state.sex === "any" ? "" : state.sex === "male" ? " for men" : " for women") +
+      (state.age === "adolescent" ? " (adolescents)" : "");
+    var who = state.sex === "male" ? "men" : "women";
+    $("status").textContent = state.sex === "any"
+      ? plural(open.length, "site") + " report " + beds + " open " + what + "; " + av.length + " more " + (av.length === 1 ? "says it has" : "say they have") + " availability without a count."
+      : plural(open.length, "site") + " report open " + what + ": " + (beds - unst) + " confirmed for " + who + ", plus " + unst + " where the report doesn’t give sex. " + av.length + " more without a count.";
+
+    var html = "";
+    if (open.length) {
+      html += '<div class="group-h"><h2>Open — count reported</h2><span>' + plural(open.length, "site") + " · " + plural(beds, "bed") + "</span></div>";
+      html += '<div class="cards">' + open.map(function (r) { return card(r.site, r.a); }).join("") + "</div>";
+    }
+    if (av.length) {
+      html += '<div class="group-h"><h2>Available — call for details</h2><span>' + plural(av.length, "site") + "</span></div>";
+      html += '<div class="cards">' + av.map(function (r) { return card(r.site, r.a); }).join("") + "</div>";
+    }
+    if (!open.length && !av.length) {
+      html += '<div class="empty">No site reports open ' + esc(what) + " right now. Check “Full today” below, widen the filters, or call providers who didn’t report.</div>";
+    }
+    if (full.length) {
+      html += '<details class="more"><summary>Full today (' + full.length + ")</summary><div class=\"cards\">" + full.map(function (r) { return card(r.site, r.a); }).join("") + "</div></details>";
+    }
+    if (other) html += '<p class="footnote">' + other + " other " + (other === 1 ? "site" : "sites") + " in today’s reports don’t offer this or didn’t mention it.</p>";
+    $("view-find").innerHTML = html;
+  }
+
+  // ---------- render: all sites grid ----------
+  function gridCell(a) {
+    if (a.state === "open") {
+      var small = a.parts && a.parts.length > 1 ? a.parts.map(function (p) { return p.n + " " + SEX_SHORT[p.sex]; }).join(" · ") : a.note ? "sex not stated" : "open";
+      return '<span class="cell open"><b>' + a.n + "</b><small>" + esc(small) + "</small></span>";
+    }
+    if (a.state === "full") return '<span class="cell full"><b>Full</b><small>0 open</small></span>';
+    if (a.state === "avail") return '<span class="cell avail"><b>Yes</b><small>no count</small></span>';
+    if (a.state === "na") return '<span class="cell na"><b>NA</b><small>per report</small></span>';
+    return '<span class="cell nr"><b>—</b><small>not reported</small></span>';
+  }
+
+  function renderGrid(sites) {
+    var byRegion = {};
+    sites.forEach(function (s) { (byRegion[s.region] = byRegion[s.region] || []).push(s); });
+    var regions = Object.keys(byRegion).sort(function (a, b) { return D.regions[a].order - D.regions[b].order; });
+    var cols = BED_TYPES.map(function (t) {
+      return '<th scope="col" class="num' + (state.type === t ? " sel" : "") + '">' + TYPE_LABEL[t] + "</th>";
+    }).join("");
+    var body = regions.map(function (r) {
+      var head = '<tr class="region-row"><th scope="rowgroup" colspan="7">' + esc(D.regions[r].label) + " · " + plural(byRegion[r].length, "site") + "</th></tr>";
+      return head + byRegion[r].map(function (site) {
+        var f = freshness(site);
+        var cells = "";
+        var unknown = (site.qualitative || []).filter(function (q) { return q.types.indexOf("unknown") > -1; })[0];
+        if (unknown) {
+          cells = '<td class="c" colspan="4"><span class="cell avail wide"><b>Beds available</b><small>type and count not given</small></span></td>';
+        } else {
+          var i = 0;
+          while (i < BED_TYPES.length) {
+            var t = BED_TYPES[i];
+            if (site.shared && site.shared.types[0] === t) {
+              var span = site.shared.types.length;
+              cells += '<td class="c" colspan="' + span + '"><span class="cell open wide"><b>' + site.shared.open + "</b><small>" + esc(site.shared.label) + (state.sex !== "any" ? " · sex not stated" : "") + "</small></span></td>";
+              i += span;
+              continue;
+            }
+            cells += '<td class="c">' + gridCell(avail(site, t, state.sex)) + "</td>";
+            i++;
+          }
+        }
+        return "<tr><th scope=\"row\" class=\"site-name\"><b>" + esc(site.name) + "</b><span>" + esc(site.org) + " · " + esc(site.town) + "</span></th>" +
+          cells + '<td><span class="fr ' + f.level + '">' + esc(f.when) + "</span></td></tr>";
+      }).join("");
+    }).join("");
+
+    $("status").textContent = sites.length + " sites from " + new Set(sites.map(function (s) { return s.report; })).size + " reports" +
+      (state.sex === "any" ? "" : state.sex === "male" ? " · counts for men" : " · counts for women") + ".";
+    $("view-grid").innerHTML = sites.length
+      ? '<div class="gridwrap"><table class="grid"><caption class="sr">Open beds by site and bed type</caption><thead><tr><th scope="col">Site</th>' + cols + '<th scope="col">Reported</th></tr></thead><tbody>' + body + "</tbody></table>" +
+        '<div class="legend"><span><span class="cell open"><b>6</b></span> open (M · F split where given)</span><span><span class="cell full"><b>Full</b></span> offered, 0 open</span><span><span class="cell na"><b>NA</b></span> marked NA by provider</span><span><span class="cell nr"><b>—</b></span> not in report</span><span><span class="cell avail"><b>Yes</b></span> available, no count</span></div></div>'
+      : '<div class="empty">No sites match these filters.</div>';
+  }
+
+  // ---------- render: daily reports ----------
+  var LVL = { "by-sex": "Count by type and sex", "by-type": "Count by type", "total-only": "Total only", "none": "No count" };
+  function renderReports() {
+    var reps = D.reports.slice().sort(function (a, b) { return new Date(b.sentAt) - new Date(a.sentAt); });
+    var today = reps.filter(function (r) { return dayKey(new Date(r.sentAt)) === dayKey(BOARD); }).length;
+    var bySex = reps.filter(function (r) { return r.specificity === "by-sex"; }).length;
+    var html = '<div class="cov">' +
+      '<div class="tile"><span class="n">' + today + " of " + reps.length + '</span><span class="l">Reported today</span><span class="s">The rest are from yesterday</span></div>' +
+      '<div class="tile"><span class="n">' + D.sites.length + '</span><span class="l">Sites covered</span><span class="s">One email can cover up to 11 sites</span></div>' +
+      '<div class="tile"><span class="n">' + bySex + " of " + reps.length + '</span><span class="l">Split by bed type and sex</span><span class="s">The detail staff need to place someone</span></div>' +
+      '<div class="tile"><span class="n">5</span><span class="l">Different email formats</span><span class="s">Table, one-liner, prose, two newsletters</span></div>' +
+      "</div>";
+    html += reps.map(function (r) {
+      var sent = new Date(r.sentAt);
+      var f = dayKey(sent) === dayKey(BOARD) ? "fresh" : "aging";
+      var when = (f === "fresh" ? "Today " : "Yesterday ") + timeOf(sent);
+      return '<article class="rep"><div><h3>' + esc(r.organization) + '</h3><div class="sub">' + esc(r.sender) + "</div>" +
+        '<div class="split"><span class="fr ' + f + '">' + when + '</span><span class="lvl ' + r.specificity + '">' + LVL[r.specificity] + '</span><span class="pill">' + r.sites.length + (r.sites.length === 1 ? " site" : " sites") + "</span></div></div>" +
+        "<dl><dt>Format</dt><dd>" + esc(r.format) + "</dd><dt>Gives</dt><dd>" + esc(r.gives) + "</dd><dt>Missing</dt><dd>" + esc(r.missing) + "</dd><dt>Ingest</dt><dd>" + esc(r.ingest) + "</dd></dl></article>";
+    }).join("");
+    $("status").textContent = reps.length + " provider emails. Sorted newest first.";
+    $("view-reports").innerHTML = html;
+  }
+
+  // ---------- tabs ----------
+  var TABS = [["find", "tab-find", "view-find"], ["grid", "tab-grid", "view-grid"], ["reports", "tab-reports", "view-reports"]];
+  function setupTabs() {
+    TABS.forEach(function (t, i) {
+      var b = $(t[1]);
+      b.addEventListener("click", function () { state.view = t[0]; render(); });
+      b.addEventListener("keydown", function (e) {
+        var d = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+        if (!d) return;
+        var next = TABS[(i + d + TABS.length) % TABS.length];
+        state.view = next[0]; render(); $(next[1]).focus();
+      });
+    });
+  }
+
+  // ---------- main render ----------
+  function render() {
+    var sites = D.sites.filter(passesFilters);
+    TABS.forEach(function (t) {
+      var on = state.view === t[0];
+      $(t[1]).setAttribute("aria-selected", on);
+      $(t[1]).tabIndex = on ? 0 : -1;
+      $(t[2]).hidden = !on;
+    });
+    $("sortbox").hidden = state.view !== "find";
+    renderTiles(sites);
+    if (state.view === "find") renderFind(sites);
+    else if (state.view === "grid") renderGrid(sites);
+    else renderReports();
+  }
+
+  function init() {
+    $("board-meta").textContent = "Board as of " + BOARD.toLocaleString("en-US", { timeZone: TZ, weekday: "short", month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }) +
+      " · " + D.reports.length + " provider reports · " + D.sites.length + " sites";
+    $("source-note").textContent = D.sourceNote;
+    buildSeg("f-type", "f-type", TYPE_OPTS, "type");
+    buildSeg("f-sex", "f-sex", SEX_OPTS, "sex");
+    buildSeg("f-age", "f-age", AGE_OPTS, "age");
+    $("f-search").addEventListener("input", function (e) { state.q = e.target.value.trim().toLowerCase(); render(); });
+    $("f-mh").addEventListener("change", function (e) { state.mh = e.target.checked; render(); });
+    $("f-fresh").addEventListener("change", function (e) { state.todayOnly = e.target.checked; render(); });
+    $("f-sort").addEventListener("change", function (e) { state.sort = e.target.value; render(); });
+    setupTabs();
+    render();
+  }
+
+  init();
+})();
