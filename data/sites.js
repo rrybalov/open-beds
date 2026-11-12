@@ -144,6 +144,31 @@
     "vfmc": [40.1215, -75.3399, "town"], "silvermist-pgh": [40.8073, -79.9753, "town"], "silvermist-pocono": [41.3376, -75.5185, "town"],
     "gaiser": [40.8612, -79.8953, "town"], "spiritlife": [40.6195, -79.0372, "town"]
   };
+  /*
+   * reach: how staff get in touch with admissions.
+   *   phone / phoneFrom   number and where it came from (provider email, or the public page it was taken from)
+   *   email / emailFrom   published intake address. Without one, the board replies to whoever sent
+   *                       the site's latest bed email (real senders are redacted in this public demo).
+   *   web                 provider page for the site
+   * Only organization lines and role addresses go here — never a staff member's own number or inbox.
+   */
+  var WDR_WEB = "https://whitedeerrun.com";
+  var REACH = {
+    "allenwood": { web: WDR_WEB }, "lehigh": { web: WDR_WEB }, "york": { web: WDR_WEB }, "mt-zion": { web: WDR_WEB }, "york-php": { web: WDR_WEB },
+    "upmc-mercy": { phone: "412-232-8800", phoneFrom: "UPMC Mercy detox line, upmc.com", web: "https://www.upmc.com/locations/hospitals/mercy/services/addiction-medicine" },
+    "upmc-mckeesport": { phone: "855-783-8762", phoneFrom: "UPMC McKeesport Addiction Medicine, upmc.com",
+      email: "McKeesportAddiction@upmc.edu", emailFrom: "upmc.com", web: "https://www.upmc.com/locations/hospitals/mckeesport/services/addiction-medicine" },
+    "silvermist-pgh": { phone: "724-268-4858", phoneFrom: "silvermistrecovery.com (one line for both Silvermist sites)", web: "https://silvermistrecovery.com" },
+    "silvermist-pocono": { phone: "724-268-4858", phoneFrom: "silvermistrecovery.com (one line for both Silvermist sites)", web: "https://silvermistrecovery.com" },
+    "providence-house": { phone: "814-430-4449", phoneFrom: "Pyramid Healthcare 24/7 admissions, pyramid-healthcare.com — not a Providence House line", web: "https://www.pyramid-healthcare.com" },
+    "spiritlife": { phone: "724-465-2165", phoneFrom: "public treatment directory (startyourrecovery.org) — confirm", web: "https://www.spiritliferecovery.org" }
+  };
+  OPEN_BEDS_SITES.sites.forEach(function (s) {
+    var r = REACH[s.id] || {};
+    s.reach = { phone: s.contact || r.phone || null, phoneFrom: s.contact ? "provider’s bed email" : r.phoneFrom || null, email: r.email || null, emailFrom: r.emailFrom || null, web: r.web || null };
+    s.contact = s.reach.phone;
+  });
+
   OPEN_BEDS_SITES.sites.forEach(function (s) { var g = GEO[s.id]; s.geo = g ? { lat: g[0], lng: g[1], precision: g[2] } : null; });
   OPEN_BEDS_SITES.levels = [
     ["wm4", "WM 4", "Medically managed withdrawal"], ["wm37", "WM 3.7", "Medically monitored withdrawal"],

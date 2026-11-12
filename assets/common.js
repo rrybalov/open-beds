@@ -151,5 +151,5 @@
     return parts.join("; ") || "No counts";
   }
 
-  root.OB = { esc: esc, when: when, timeOf: timeOf, sourceChip: sourceChip, sourceLink: sourceLink, SOURCE: SOURCE, plural: plural, TYPE_LABEL: TYPE_LABEL, SEX_LABEL: SEX_LABEL, entrySummary: entrySummary, TZ: TZ };
+  root.OB = { esc: esc, when: when, timeOf: timeOf, sourceChip: sourceChip, sourceLink: sourceLink, SOURCE: SOURCE, ICON: ICON, plural: plural, TYPE_LABEL: TYPE_LABEL, SEX_LABEL: SEX_LABEL, entrySummary: entrySummary, TZ: TZ };
 })(window);

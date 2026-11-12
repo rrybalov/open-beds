@@ -77,7 +77,6 @@
     <div class="viewbar">
       <div class="tabs" role="tablist" aria-label="Views">
         <button type="button" role="tab" id="tab-find" aria-controls="view-find" aria-selected="true">Find a bed</button>
-        <button type="button" role="tab" id="tab-map" aria-controls="view-map" aria-selected="false" tabindex="-1">Map</button>
         <button type="button" role="tab" id="tab-grid" aria-controls="view-grid" aria-selected="false" tabindex="-1">All sites</button>
         <button type="button" role="tab" id="tab-updates" aria-controls="view-updates" aria-selected="false" tabindex="-1">Updates</button>
       </div>
@@ -94,21 +93,29 @@
 
     <div id="results" tabindex="-1">
       <p class="status" id="status" aria-live="polite"></p>
-      <section id="view-find" role="tabpanel" aria-labelledby="tab-find"></section>
-      <section id="view-map" role="tabpanel" aria-labelledby="tab-map" hidden>
-        <form class="mapsearch" id="map-form" role="search">
-          <label class="lbl" for="map-q">Address or ZIP code</label>
-          <div class="mapsearch-row">
-            <input id="map-q" class="input" type="search" placeholder="15219, or 1 Smithfield St, Pittsburgh" autocomplete="off" enterkeyhint="search">
-            <button class="btn primary" type="submit">Find nearest</button>
-            <button class="btn" type="button" id="map-me">Use my location</button>
-            <button class="btn" type="button" id="map-clear" hidden>Clear</button>
+      <section id="view-find" role="tabpanel" aria-labelledby="tab-find">
+        <div class="findbar">
+          <fieldset class="seg-group modeseg">
+            <legend class="sr">Show results as</legend>
+            <div class="seg" id="f-mode"></div>
+          </fieldset>
+          <form class="mapsearch" id="map-form" role="search">
+            <label class="lbl" for="map-q">Distance from an address or ZIP code</label>
+            <div class="mapsearch-row">
+              <input id="map-q" class="input" type="search" placeholder="15219, or 1 Smithfield St, Pittsburgh" autocomplete="off" enterkeyhint="search">
+              <button class="btn primary" type="submit">Find nearest</button>
+              <button class="btn" type="button" id="map-me">Use my location</button>
+              <button class="btn" type="button" id="map-clear" hidden>Clear</button>
+            </div>
+            <p class="hint" id="map-msg">Looked up with OpenStreetMap. Enter a ZIP or address only — never a client’s name.</p>
+          </form>
+        </div>
+        <div id="find-list"></div>
+        <div id="find-map" hidden>
+          <div class="maplayout">
+            <div class="mapbox"><div id="map" class="map" role="region" aria-label="Map of providers. Select a pin to see that provider’s availability in the list."></div><p class="map-off" id="map-off" hidden>The map couldn’t load on this network. The list still sorts by distance.</p></div>
+            <div class="maplist-wrap" id="map-list-wrap"><ol class="maplist" id="map-list" aria-label="Providers"></ol></div>
           </div>
-          <p class="hint" id="map-msg">Looked up with OpenStreetMap. Enter a ZIP or address only — never a client’s name.</p>
-        </form>
-        <div class="maplayout">
-          <div class="mapbox"><div id="map" class="map" role="region" aria-label="Map of providers"></div><p class="map-off" id="map-off" hidden>The map couldn’t load on this network. The list still sorts by distance.</p></div>
-          <div class="maplist-wrap"><ol class="maplist" id="map-list" aria-label="Providers by distance"></ol></div>
         </div>
       </section>
       <section id="view-grid" role="tabpanel" aria-labelledby="tab-grid" hidden></section>
@@ -117,7 +124,7 @@
   </main>
 
   <footer class="wrap foot">
-    <p>Staff names and direct lines from provider emails are not stored in this public repository. Sites without a listed admissions line show “Number in provider profile.”</p>
+    <p>Admissions numbers come from provider emails or the provider’s public pages; each card says which. Staff names and personal inboxes are not stored in this public repository.</p>
   </footer>
 
   <script src="data/sites.js"></script>

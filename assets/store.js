@@ -92,7 +92,7 @@
         var c = cur[p.id];
         var site = {
           id: p.id, name: p.name, fullName: p.fullName, org: orgById[p.org].short, orgId: p.org, town: p.town, region: p.region,
-          population: p.population, services: p.services, contact: p.contact, fit: p.fit || {}, geo: p.geo || null, beds: p.beds
+          population: p.population, services: p.services, contact: p.contact, reach: p.reach || {}, fit: p.fit || {}, geo: p.geo || null, beds: p.beds
         };
         if (!c) { site.noReport = true; return site; }
         var e = c.entry;
@@ -104,7 +104,7 @@
         site.qualitative = e.qualitative;
         site.notes = e.notes;
         site.sexSplitInferred = (e.flags || []).indexOf("sexSplitInferred") > -1;
-        site.report = { id: c.report.id, source: c.report.source, receivedAt: c.report.receivedAt, by: c.report.by, template: c.report.parse && c.report.parse.template, reason: c.report.reason };
+        site.report = { id: c.report.id, source: c.report.source, receivedAt: c.report.receivedAt, by: c.report.by, template: c.report.parse && c.report.parse.template, reason: c.report.reason, from: c.report.email && c.report.email.from };
         return site;
       });
     }

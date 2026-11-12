@@ -11,7 +11,7 @@
   var TYPE_LABEL = OB.TYPE_LABEL;
   var SEX_SHORT = { male: "M", female: "F", any: "" };
 
-  var state = { type: "any", sex: "any", age: "adult", loca: "any", pay: "any", q: "", mh: false, recentOnly: false, view: "find", sort: "region", origin: null };
+  var state = { type: "any", sex: "any", age: "adult", loca: "any", pay: "any", q: "", mh: false, recentOnly: false, view: "find", mode: "list", sort: "region", origin: null, selected: null };
   var PAY = {};
   S.sites.payTypes.forEach(function (p) { PAY[p[0]] = { label: p[1], short: p[2] }; });
   // true = known to take it, false = known not to, undefined = not on file
@@ -218,11 +218,49 @@
 
   var PHONE_SVG = '<svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2Z"/></svg>';
 
-  function sourceDetail(site) {
-    var r = site.report;
-    if (r.source === "email") return "Read from " + esc(S.orgById[site.orgId].short) + "’s email.";
-    if (r.source === "form") return "Submitted on the provider update form" + (r.by && r.by !== "Provider form" ? " by " + esc(r.by) : "") + ".";
-    return "Updated by DHS staff" + (r.reason ? ": “" + esc(r.reason) + "”" : "") + ".";
+  // ---------- contact ----------
+  var MAIL_SVG = '<svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16"><rect x="3" y="5" width="18" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="m3.5 6.5 8.5 7 8.5-7" fill="none" stroke="currentColor" stroke-width="2"/></svg>';
+  var WEB_SVG = '<svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3 12h18M12 3c3 3.2 3 14.8 0 18M12 3c-3 3.2-3 14.8 0 18" fill="none" stroke="currentColor" stroke-width="2"/></svg>';
+  function tel(n) { return "tel:" + n.replace(/[^0-9]/g, ""); }
+  // Published intake address, else whoever sent the latest bed email (redacted in the demo).
+  function intakeEmail(site) {
+    if (site.reach && site.reach.email) return { to: site.reach.email, how: "Intake address from " + site.reach.emailFrom };
+    var from = site.report && site.report.from;
+    if (from && !/^redacted@/i.test(from)) return { to: from, how: "Replies to the address that sent today’s bed email" };
+    return null;
+  }
+  function mailto(site) {
+    var em = intakeEmail(site);
+    if (!em) return null;
+    var a = availFor(site);
+    var want = (state.type === "any" ? "a bed" : "a " + TYPE_LABEL[state.type].toLowerCase() + " bed") + (state.sex === "male" ? " for a man" : state.sex === "female" ? " for a woman" : "");
+    var saw = site.report ? (a.state === "open" ? a.n + " open" : a.state === "avail" ? "availability" : "no open beds") + " in your update from " + OB.when(site.report.receivedAt).label.replace(/^Today /, "today at ") : "";
+    var body = "Hello " + site.name + " admissions,\n\nPathways is looking for " + want + ". " + (saw ? "The bed board shows " + saw + ". " : "") +
+      "Is a bed still available, and what do you need from us to send a referral?\n\nThank you,\n";
+    return "mailto:" + em.to + "?subject=" + encodeURIComponent("Bed availability — " + site.name + " (Pathways)") + "&body=" + encodeURIComponent(body);
+  }
+  // The Email tag composes an email to the provider; Form and DHS tags stay labels.
+  function sourceTag(site) {
+    if (!site.report) return "";
+    var m = site.report.source === "email" ? mailto(site) : null;
+    if (!m) return OB.sourceChip(site.report.source);
+    return '<a class="src-chip src-email" href="' + esc(m) + '" title="Email ' + esc(site.name) + ' admissions">' + OB.ICON.email + 'Email<span class="sr"> ' + esc(site.name) + " admissions</span></a>";
+  }
+  function contactStrip(site) {
+    var r = site.reach || {}, m = mailto(site), em = intakeEmail(site), bits = [];
+    if (r.phone) bits.push('<a class="cbtn primary" href="' + tel(r.phone) + '" aria-label="Call ' + esc(site.name) + " admissions, " + esc(r.phone) + '">' + PHONE_SVG + esc(r.phone) + "</a>");
+    if (m) bits.push('<a class="cbtn" href="' + esc(m) + '">' + MAIL_SVG + "Email intake</a>");
+    if (site.geo) {
+      var dest = site.geo.precision === "address" ? site.geo.lat + "," + site.geo.lng : (site.fullName || site.name) + ", " + site.town + ", PA";
+      bits.push('<a class="cbtn" href="https://www.google.com/maps/dir/?api=1' + (state.origin ? "&amp;origin=" + state.origin.lat + "," + state.origin.lng : "") + "&amp;destination=" + esc(encodeURIComponent(dest)) + '" target="_blank" rel="noopener">Directions</a>');
+    }
+    if (r.web) bits.push('<a class="cbtn" href="' + esc(r.web) + '" target="_blank" rel="noopener">' + WEB_SVG + "Website</a>");
+    var notes = [];
+    if (r.phone && r.phoneFrom) notes.push("Phone: " + r.phoneFrom + ".");
+    if (em) notes.push(em.how + ".");
+    else notes.push("No intake email on file.");
+    if (!r.phone) notes.push("No phone on file.");
+    return '<div class="contact"><p class="contact-h">Contact admissions</p><div class="contact-btns">' + bits.join("") + '</div><p class="contact-note">' + esc(notes.join(" ")) + "</p></div>";
   }
 
   function card(site, a) {
@@ -231,16 +269,13 @@
     if (a.state === "open") box = '<div class="count open"><b>' + a.n + "</b><span>" + esc(countLabel(a)) + "</span></div>";
     else if (a.state === "avail") box = '<div class="count avail"><b>Available</b><span>no count given</span></div>';
     else box = '<div class="count full"><b>Full</b><span>' + (state.type === "any" ? "all reported beds" : esc(countLabel(a))) + "</span></div>";
-    var call = site.contact
-      ? '<a class="call" href="tel:' + site.contact.replace(/[^0-9]/g, "") + '" aria-label="Call ' + esc(site.name) + " admissions, " + esc(site.contact) + '">' + PHONE_SVG + esc(site.contact) + "</a>"
-      : '<span class="nocall">Number in provider profile</span>';
     return '<article class="card">' + box +
       '<div class="site"><h3>' + esc(site.name) + (site.fullName && site.fullName !== site.name ? ' <span class="full-name">' + esc(site.fullName) + "</span>" : "") + "</h3>" +
       '<div class="where">' + esc(site.org) + " · " + esc(site.town) + " · " + esc(regionLabel(site)) + (state.origin ? " · " + esc(distLabel(site)) : "") + "</div>" +
       '<div class="split">' + splitPills(site, a) + "</div></div>" +
-      '<div class="side"><span class="fr ' + f.level + '" title="' + esc(f.age) + '">' + esc(f.label) + "</span>" + OB.sourceChip(site.report.source, site.report.id, site.id) + call + "</div>" +
+      '<div class="side"><span class="fr ' + f.level + '" title="' + esc(f.age) + '">' + esc(f.label) + "</span>" + sourceTag(site) + "</div>" +
       fitSection(site) +
-      '<p class="src">' + sourceDetail(site) + " " + OB.sourceLink(site.report.source, site.report.id, site.id) + "</p>" +
+      contactStrip(site) +
       "</article>";
   }
 
@@ -301,7 +336,7 @@
         (no ? " " + plural(no, "site") + " that " + (no === 1 ? "doesn’t" : "don’t") + " take it " + (no === 1 ? "is" : "are") + " hidden." : ""));
     }
     if (foot.length) html += '<p class="footnote">' + foot.join(" ") + "</p>";
-    $("view-find").innerHTML = html;
+    $("find-list").innerHTML = html;
   }
 
   // ---------- all sites grid ----------
@@ -332,7 +367,7 @@
           upd = '<span class="fr stale">No report</span>';
         } else {
           var f = OB.when(site.report.receivedAt);
-          upd = '<span class="fr ' + f.level + '">' + esc(f.label) + "</span> " + OB.sourceChip(site.report.source, site.report.id, site.id);
+          upd = '<span class="fr ' + f.level + '">' + esc(f.label) + "</span> " + sourceTag(site) + (site.reach.phone ? '<a class="grid-tel" href="' + tel(site.reach.phone) + '">' + esc(site.reach.phone) + "</a>" : "");
           if (isNoCount(site)) {
             cells = '<td class="c" colspan="4"><span class="cell avail wide"><b>Beds available</b><small>type and count not given</small></span></td>';
           } else {
@@ -377,7 +412,7 @@
       var f = OB.when(r.receivedAt);
       var names = r.entries.filter(function (e) { return e.siteId; }).map(function (e) { return S.siteById[e.siteId] ? S.siteById[e.siteId].name : e.siteId; });
       var org = r.orgId && S.orgById[r.orgId] ? S.orgById[r.orgId].short : "Unknown sender";
-      return '<article class="feed"><div class="feed-top"><b>' + esc(org) + "</b>" + OB.sourceChip(r.source, r.id) + '<span class="fr ' + f.level + '">' + esc(f.label) + "</span></div>" +
+      return '<article class="feed"><div class="feed-top"><b>' + esc(org) + "</b>" + OB.sourceChip(r.source) + '<span class="fr ' + f.level + '">' + esc(f.label) + "</span></div>" +
         '<div class="feed-sites">' + esc(plural(names.length, "site")) + ": " + esc(names.join(", ")) + "</div>" +
         (r.source === "admin" && r.reason ? '<div class="feed-note">“' + esc(r.reason) + "”</div>" : "") +
         "</article>";
@@ -387,7 +422,7 @@
   }
 
 
-  // ---------- map ----------
+  // ---------- map (Find a bed → Map) ----------
   var map = null, pinLayer = null, originPin = null, pins = {}, needFit = true;
   function haversine(a, b) {
     var R = 3958.8, r = Math.PI / 180;
@@ -406,21 +441,100 @@
     if (a.state === "avail") return { cls: "avail", text: "Yes", say: "available, no count" };
     if (a.state === "full") return { cls: "full", text: "Full", say: "full" };
     if (a.state === "none") return { cls: "none", text: "?", say: "no report yet" };
-    return { cls: "nr", text: "—", say: "not reported for this filter" };
+    return { cls: "nr", text: "—", say: "not reported for these filters" };
   }
-  var PRECISION = { address: "", town: "Pin at the town centre, so distance is approximate.", area: "Rough area only — address not on file." };
-  function directions(site) {
-    return "https://www.google.com/maps/dir/?api=1" + (state.origin ? "&origin=" + state.origin.lat + "," + state.origin.lng : "") +
-      "&destination=" + encodeURIComponent(site.geo.precision === "address" ? site.geo.lat + "," + site.geo.lng : (site.fullName || site.name) + ", " + site.town + ", PA");
+  var PRECISION = { town: "Pin at the town centre, so distance is approximate.", area: "Rough area only." };
+
+  function detail(site, a) {
+    if (site.noReport) return '<p class="fit-none">No report yet — call to check.</p>' + contactStrip(site);
+    var f = OB.when(site.report.receivedAt);
+    var head = a.state === "open" ? a.n + " " + countLabel(a) : a.state === "avail" ? "Available — no count given" : a.state === "full" ? "Full" : "Not reported for these filters";
+    return '<div class="ml-sum"><b>' + esc(head) + '</b><span class="fr ' + f.level + '" title="' + esc(f.age) + '">' + esc(f.label) + "</span>" + sourceTag(site) + "</div>" +
+      '<div class="split">' + splitPills(site, a) + "</div>" +
+      (site.geo && PRECISION[site.geo.precision] ? '<p class="fit-note">' + PRECISION[site.geo.precision] + "</p>" : "") +
+      fitSection(site) + contactStrip(site);
   }
-  function popupHtml(site, a) {
-    var b = badge(site, a);
-    return '<div class="pop"><b>' + esc(site.name) + '</b><span class="pop-where">' + esc(site.org) + " · " + esc(site.town) + "</span>" +
-      '<span class="pop-count ' + b.cls + '">' + (a.state === "open" ? a.n + " " + esc(countLabel(a)) : esc(b.say)) + "</span>" +
-      (state.origin ? '<span class="pop-dist">' + esc(distLabel(site)) + " straight-line</span>" : "") +
-      (PRECISION[site.geo.precision] ? '<span class="pop-note">' + PRECISION[site.geo.precision] + "</span>" : "") +
-      '<span class="pop-links">' + (site.contact ? '<a href="tel:' + site.contact.replace(/[^0-9]/g, "") + '">' + esc(site.contact) + "</a>" : "") +
-      '<a href="' + esc(directions(site)) + '" target="_blank" rel="noopener">Directions</a></span></div>';
+
+  function renderMap(sites) {
+    var rows = sites.map(function (s) { return { site: s, a: availFor(s) }; });
+    var rank = { open: 0, avail: 1, full: 2, nr: 3, na: 3, none: 4 };
+    rows.sort(function (x, y) { return (rank[x.a.state] - rank[y.a.state]) || sorter(x, y); });
+    if (state.origin) rows.sort(function (x, y) { return (distOf(x.site) - distOf(y.site)) || ((y.a.n || 0) - (x.a.n || 0)); });
+    var placed = rows.filter(function (r) { return r.site.geo; });
+    var open = rows.filter(function (r) { return r.a.state === "open"; });
+    var nearestOpen = state.origin ? open.filter(function (r) { return r.site.geo; })[0] : null;
+    var what = state.type === "any" ? "beds" : TYPE_LABEL[state.type].toLowerCase() + " beds";
+    $("status").textContent = state.origin
+      ? "Nearest to " + state.origin.label + ". " + (nearestOpen ? "Closest site with open " + what + ": " + nearestOpen.site.name + ", " + distLabel(nearestOpen.site) + " (straight-line)." : "No site with a reported open count matches these filters.")
+      : plural(open.length, "site") + " with open " + what + " · " + plural(placed.length, "site") + " on the map. Select a pin to see its availability.";
+    if (state.selected && !rows.some(function (r) { return r.site.id === state.selected; })) state.selected = null;
+
+    $("map-list").innerHTML = rows.map(function (r) {
+      var s = r.site, b = badge(s, r.a), on = state.selected === s.id;
+      return '<li class="ml' + (on ? " sel" : "") + '" id="ml-' + esc(s.id) + '">' +
+        '<button type="button" class="ml-head" data-sel="' + esc(s.id) + '" aria-expanded="' + on + '" aria-controls="mld-' + esc(s.id) + '">' +
+        '<span class="ml-n ' + b.cls + '" aria-hidden="true">' + esc(b.text) + "</span>" +
+        '<span class="ml-body"><b>' + esc(s.name) + '</b><span class="ml-where">' + esc(s.org) + " · " + esc(s.town) + (state.origin ? " · " + esc(distLabel(s)) : "") + "</span>" +
+        '<span class="sr">' + esc(b.say) + "</span></span>" + '<span class="ml-chev" aria-hidden="true"></span></button>' +
+        '<div class="ml-detail" id="mld-' + esc(s.id) + '"' + (on ? "" : " hidden") + ">" + (on ? detail(s, r.a) : "") + "</div></li>";
+    }).join("") || '<li class="empty">No sites match these filters.</li>';
+
+    if (!ensureMap()) return;
+    map.invalidateSize();
+    pinLayer.clearLayers();
+    pins = {};
+    // Spread pins that share a point (the three York sites) in a small ring.
+    var groups = {};
+    placed.forEach(function (r) { var k = r.site.geo.lat.toFixed(3) + "," + r.site.geo.lng.toFixed(3); (groups[k] = groups[k] || []).push(r); });
+    Object.keys(groups).forEach(function (k) {
+      var g = groups[k];
+      g.forEach(function (r, i) {
+        var lat = r.site.geo.lat, lng = r.site.geo.lng;
+        if (g.length > 1) { var ang = 2 * Math.PI * i / g.length; lat += 0.02 * Math.cos(ang); lng += 0.027 * Math.sin(ang); }
+        var b = badge(r.site, r.a), on = state.selected === r.site.id;
+        var m = L.marker([lat, lng], {
+          icon: L.divIcon({ className: "pin-wrap", html: '<span class="pin ' + b.cls + (on ? " sel" : "") + '">' + esc(b.text) + "</span>", iconSize: [40, 40], iconAnchor: [20, 20] }),
+          title: r.site.name + " — " + b.say, alt: r.site.name + " — " + b.say, riseOnHover: true, keyboard: true,
+          zIndexOffset: on ? 3000 : r.a.state === "open" ? 1000 : 0
+        });
+        m.on("click", function () { select(r.site.id, false); });
+        m.addTo(pinLayer);
+        pins[r.site.id] = m;
+      });
+    });
+    if (originPin) { originPin.remove(); originPin = null; }
+    if (state.origin) {
+      originPin = L.marker([state.origin.lat, state.origin.lng], {
+        icon: L.divIcon({ className: "pin-wrap", html: '<span class="pin origin" aria-hidden="true"></span>', iconSize: [22, 22], iconAnchor: [11, 11] }),
+        title: "Searched location: " + state.origin.label, alt: "Searched location", keyboard: false, interactive: false, zIndexOffset: 2000
+      }).addTo(map);
+    }
+    if (needFit) {
+      needFit = false;
+      var pts = state.origin
+        ? [[state.origin.lat, state.origin.lng]].concat(placed.slice(0, 4).map(function (r) { return [r.site.geo.lat, r.site.geo.lng]; }))
+        : placed.map(function (r) { return [r.site.geo.lat, r.site.geo.lng]; });
+      if (pts.length > 1) map.fitBounds(L.latLngBounds(pts), { padding: [36, 36], maxZoom: 11 });
+      else if (pts.length) map.setView(pts[0], 10);
+    }
+  }
+
+  // Select a provider: expands it in the list and highlights its pin. From a pin, the list scrolls to it;
+  // from the list, the map pans to the pin.
+  function select(id, fromList) {
+    state.selected = fromList && state.selected === id ? null : id;
+    render();
+    var li = $("ml-" + id);
+    if (!li) return;
+    if (fromList) {
+      if (state.selected && map && pins[id]) map.panTo(pins[id].getLatLng());
+      li.querySelector(".ml-head").focus();
+    } else {
+      var wrap = $("map-list-wrap");
+      if (wrap.scrollHeight > wrap.clientHeight + 4) wrap.scrollTop = li.offsetTop - 8;
+      else li.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      li.querySelector(".ml-head").focus({ preventScroll: true });
+    }
   }
   function ensureMap() {
     if (map) return map;
@@ -434,70 +548,6 @@
     map.on("focus", function () { map.scrollWheelZoom.enable(); });
     map.on("blur", function () { map.scrollWheelZoom.disable(); });
     return map;
-  }
-  function renderMap(sites) {
-    var rows = sites.map(function (s) { return { site: s, a: availFor(s) }; });
-    var rank = { open: 0, avail: 1, full: 2, nr: 3, na: 3, none: 4 };
-    rows.sort(function (x, y) {
-      if (state.origin) return (distOf(x.site) - distOf(y.site)) || ((y.a.n || 0) - (x.a.n || 0));
-      return (rank[x.a.state] - rank[y.a.state]) || ((y.a.n || 0) - (x.a.n || 0)) || (regionOrder(x.site) - regionOrder(y.site));
-    });
-    var placed = rows.filter(function (r) { return r.site.geo; }), unplaced = rows.filter(function (r) { return !r.site.geo; });
-    var open = rows.filter(function (r) { return r.a.state === "open"; });
-    var nearestOpen = state.origin ? open.filter(function (r) { return r.site.geo; })[0] : null;
-    $("status").textContent = state.origin
-      ? "Nearest to " + state.origin.label + ". " + (nearestOpen ? "Closest site with open " + (state.type === "any" ? "beds" : TYPE_LABEL[state.type].toLowerCase() + " beds") + ": " + nearestOpen.site.name + ", " + distLabel(nearestOpen.site) + " (straight-line)." : "No site with a reported open count matches these filters.")
-      : plural(placed.length, "site") + " on the map · " + plural(open.length, "site") + " with open beds. Search an address or ZIP to sort by distance.";
-
-    // List
-    $("map-list").innerHTML = rows.map(function (r, i) {
-      var s = r.site, b = badge(s, r.a);
-      return '<li class="ml ' + b.cls + '"><span class="ml-n ' + b.cls + '" aria-hidden="true">' + esc(b.text) + "</span>" +
-        '<div class="ml-body"><b>' + esc(s.name) + '</b><span class="ml-where">' + esc(s.town) + (state.origin ? " · " + esc(distLabel(s)) : "") + '</span><span class="sr">' + esc(b.say) + "</span>" +
-        '<span class="ml-act">' + (s.geo ? '<button type="button" class="linkbtn" data-pin="' + esc(s.id) + '">Show on map</button>' : '<span class="fit-none">Location not on file</span>') +
-        (s.contact ? '<a href="tel:' + s.contact.replace(/[^0-9]/g, "") + '">' + esc(s.contact) + "</a>" : "") +
-        (s.report ? OB.sourceChip(s.report.source, s.report.id, s.id) : "") + "</span></div></li>";
-    }).join("") || '<li class="empty">No sites match these filters.</li>';
-
-    if (!ensureMap()) return;
-    map.invalidateSize();
-    var reopen = Object.keys(pins).filter(function (id) { return pins[id].isPopupOpen(); })[0];
-    pinLayer.clearLayers();
-    pins = {};
-    // Spread pins that share a point (e.g. three York sites) in a small ring.
-    var groups = {};
-    placed.forEach(function (r) { var k = r.site.geo.lat.toFixed(3) + "," + r.site.geo.lng.toFixed(3); (groups[k] = groups[k] || []).push(r); });
-    Object.keys(groups).forEach(function (k) {
-      var g = groups[k];
-      g.forEach(function (r, i) {
-        var lat = r.site.geo.lat, lng = r.site.geo.lng;
-        if (g.length > 1) { var ang = 2 * Math.PI * i / g.length; lat += 0.02 * Math.cos(ang); lng += 0.027 * Math.sin(ang); }
-        var b = badge(r.site, r.a);
-        var m = L.marker([lat, lng], {
-          icon: L.divIcon({ className: "pin-wrap", html: '<span class="pin ' + b.cls + '">' + esc(b.text) + "</span>", iconSize: [40, 40], iconAnchor: [20, 20], popupAnchor: [0, -18] }),
-          title: r.site.name + " — " + b.say, alt: r.site.name + " — " + b.say, riseOnHover: true,
-          zIndexOffset: r.a.state === "open" ? 1000 : 0
-        }).bindPopup(popupHtml(r.site, r.a));
-        m.addTo(pinLayer);
-        pins[r.site.id] = m;
-      });
-    });
-    if (reopen && pins[reopen]) pins[reopen].openPopup();
-    if (originPin) { originPin.remove(); originPin = null; }
-    if (state.origin) {
-      originPin = L.marker([state.origin.lat, state.origin.lng], {
-        icon: L.divIcon({ className: "pin-wrap", html: '<span class="pin origin" aria-hidden="true"></span>', iconSize: [22, 22], iconAnchor: [11, 11] }),
-        title: "Searched location", alt: "Searched location", zIndexOffset: 2000
-      }).bindPopup("<b>" + esc(state.origin.label) + "</b>").addTo(map);
-    }
-    if (needFit) {
-      needFit = false;
-      var pts = state.origin
-        ? [[state.origin.lat, state.origin.lng]].concat(placed.slice(0, 4).map(function (r) { return [r.site.geo.lat, r.site.geo.lng]; }))
-        : placed.map(function (r) { return [r.site.geo.lat, r.site.geo.lng]; });
-      if (pts.length > 1) map.fitBounds(L.latLngBounds(pts), { padding: [36, 36], maxZoom: 11 });
-      else if (pts.length) map.setView(pts[0], 10);
-    }
   }
 
   // Geocoding: OpenStreetMap Nominatim, biased to Pennsylvania. Production should use the county's geocoder.
@@ -531,7 +581,7 @@
     mapMsg("Looking up “" + q + "”…");
     geocode(q).then(function (o) {
       if (!o) { mapMsg("Couldn’t find “" + q + "”. Try a ZIP code or add the town.", true); return; }
-      mapMsg("Showing distances from " + o.label + ". Distances are straight-line.");
+      mapMsg("Distances from " + o.label + " are straight-line.");
       setOrigin(o);
     }).catch(function () { mapMsg("The address lookup isn’t reachable from this network. Try “Use my location”.", true); });
   });
@@ -539,23 +589,18 @@
     if (!navigator.geolocation) { mapMsg("This browser can’t share its location.", true); return; }
     mapMsg("Getting your location…");
     navigator.geolocation.getCurrentPosition(function (p) {
-      mapMsg("Showing distances from your location. Distances are straight-line.");
+      mapMsg("Distances from your location are straight-line.");
       setOrigin({ lat: p.coords.latitude, lng: p.coords.longitude, label: "your location" });
     }, function () { mapMsg("Location wasn’t shared. Type a ZIP code instead.", true); }, { timeout: 10000 });
   });
   $("map-clear").addEventListener("click", function () { $("map-q").value = ""; mapMsg("Looked up with OpenStreetMap. Enter a ZIP or address only — never a client’s name."); setOrigin(null); });
   $("map-list").addEventListener("click", function (e) {
-    var b = e.target.closest("[data-pin]");
-    if (!b || !map) return;
-    var m = pins[b.getAttribute("data-pin")];
-    if (!m) return;
-    map.setView(m.getLatLng(), Math.max(map.getZoom(), 10));
-    m.openPopup();
-    $("map").scrollIntoView({ block: "nearest", behavior: "smooth" });
+    var b = e.target.closest("[data-sel]");
+    if (b) select(b.getAttribute("data-sel"), true);
   });
 
   // ---------- tabs ----------
-  var TABS = [["find", "tab-find", "view-find"], ["map", "tab-map", "view-map"], ["grid", "tab-grid", "view-grid"], ["updates", "tab-updates", "view-updates"]];
+  var TABS = [["find", "tab-find", "view-find"], ["grid", "tab-grid", "view-grid"], ["updates", "tab-updates", "view-updates"]];
   function setupTabs() {
     TABS.forEach(function (t, i) {
       var b = $(t[1]);
@@ -582,8 +627,11 @@
     });
     $("sortbox").hidden = state.view !== "find";
     renderTiles(sites);
-    if (state.view === "find") renderFind(sites);
-    else if (state.view === "map") renderMap(sites);
+    if (state.view === "find") {
+      $("find-list").hidden = state.mode !== "list";
+      $("find-map").hidden = state.mode !== "map";
+      if (state.mode === "map") renderMap(sites); else renderFind(sites);
+    }
     else if (state.view === "grid") renderGrid(sites);
     else renderUpdates();
   }
@@ -591,6 +639,7 @@
   buildSeg("f-type", "f-type", TYPE_OPTS, "type");
   buildSeg("f-sex", "f-sex", SEX_OPTS, "sex");
   buildSeg("f-age", "f-age", AGE_OPTS, "age");
+  buildSeg("f-mode", "f-mode", [["list", "List"], ["map", "Map"]], "mode");
   $("f-loca").innerHTML += S.sites.levels.map(function (l) { return '<option value="' + l[0] + '">' + esc(l[1] + " — " + l[2]) + "</option>"; }).join("");
   // Picking a LOCA level also picks the matching bed type; staff can change it after.
   var LOCA_TYPE = { wm4: "detox", wm37: "detox", "4": "residential", "37": "residential", "35": "residential", "25": "php", "21": "outpatient", "1": "outpatient" };

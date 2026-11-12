@@ -12,7 +12,7 @@ Counts reach the board three ways:
 
 | Page | For | What it does |
 |---|---|---|
-| [`index.html`](index.html) | Pathways intake staff | **Find a bed** (filter by bed type, sex, age, LOCA level and payment; each card shows who the site takes), **Map** (type an address or ZIP, see the nearest sites and their open beds), **All sites** grid, **Updates** feed. Every Email / Form / DHS tag opens its source — the email itself, with the lines the board read highlighted. |
+| [`index.html`](index.html) | Pathways intake staff | **Find a bed** (filter by bed type, sex, age, LOCA level and payment; each card shows who the site takes), with a **List / Map** toggle (the same filters drive both; type an address or ZIP to sort by distance; select a pin to open that provider's availability in the side list). Every card ends with **Contact admissions**: call, email intake, directions, website. **All sites** grid, **Updates** feed. |
 | [`update.html`](update.html) | Providers | Enter open beds per site. A personal link (`update.html?org=gaiser`) preselects the provider. |
 | [`admin.html`](admin.html) | DHS staff | **Email inbox** with review queue and an email simulator, **Sites** with manual updates, **Activity** log, **Settings** |
 
@@ -37,7 +37,9 @@ No build step. Serve the folder (`python3 -m http.server`) or open `index.html`.
 | `docs/email-aggregation.md` | The 7 emails side by side, with totals |
 | `docs/mvp-recommendations.md` | Board design recommendations |
 
-## Map and payment data
+## Contacts, map and payment data
+
+- **Contacts:** `reach` in `data/sites.js` — admissions phone, intake email and website, each with where it came from. The Email tag and “Email intake” open a pre-written email (no client details) to the published intake address, or else to whoever sent the site’s latest bed email. Only UPMC McKeesport publishes an intake address today; sample sender addresses are redacted, so other sites show “No intake email on file” in the demo.
 
 - **Map:** Leaflet with CARTO/OpenStreetMap tiles, loaded from cdnjs. Addresses and ZIPs are looked up with OpenStreetMap's Nominatim, biased to Pennsylvania. Distances are straight-line; most pins sit at the town centre (`geo.precision` in `data/sites.js`) until street addresses are on file. If the map library is blocked, the list still sorts by distance. For production, use the county's own geocoder so no address leaves DHS systems.
 - **Payment:** `fit.pay` in `data/sites.js` records what each site is known to take (`true`) or not take (`false`). Few sites have this on file yet, so the filter hides only sites known *not* to take a payment type, lists confirmed sites first, and tells staff to ask about the rest.
