@@ -5,6 +5,11 @@
  *   source "email"  a provider email to the alias, parsed automatically
  *   source "form"   a provider using the update form
  *   source "admin"  DHS staff editing on the admin page
+ *   source "referral"  intake staff marking that they referred someone: takes one bed
+ *                      off the site's latest count until the provider reports again
+ *
+ * Facilities DHS adds on the admin page are kept with the log (state.customSites / customOrgs)
+ * and merged into the site list, so every page and the email parser see them.
  *
  * A report holds one entry per site. The board shows, for each site, the entry
  * from its most recent PUBLISHED report. Emails the parser isn't sure about wait
@@ -57,6 +62,16 @@
       return { version: 2, seededAt: new Date(now).toISOString(), touched: false, settings: { autoPublish: true }, reports: reports };
     }
 
+    // Merge facilities added on the admin page into the shared site list.
+    function hydrate(s) {
+      (s.customOrgs || []).forEach(function (o) { if (!orgById[o.id]) { SITES.orgs.push(o); orgById[o.id] = o; } });
+      (s.customSites || []).forEach(function (p) { if (!siteById[p.id]) { SITES.sites.push(p); siteById[p.id] = p; } });
+    }
+    function dropCustom() {
+      for (var i = SITES.sites.length - 1; i >= 0; i--) if (SITES.sites[i].custom) { delete siteById[SITES.sites[i].id]; SITES.sites.splice(i, 1); }
+      for (var j = SITES.orgs.length - 1; j >= 0; j--) if (SITES.orgs[j].custom) { delete orgById[SITES.orgs[j].id]; SITES.orgs.splice(j, 1); }
+    }
+
     function load() {
       var s = read();
       if (!s || s.version !== 2 || (!s.touched && (Date.now() - new Date(s.seededAt)) / 36e5 > RESEED_AFTER_H)) {
@@ -64,6 +79,7 @@
         memory = s;
         try { root.localStorage && root.localStorage.setItem(KEY, JSON.stringify(s)); } catch (e) { /* ignore */ }
       }
+      hydrate(s);
       return s;
     }
 
@@ -85,18 +101,35 @@
       return out;
     }
 
+    // Referrals marked since a count was reported take one bed each off that count.
+    function applyReferrals(counts, shared, refs) {
+      counts = JSON.parse(JSON.stringify(counts || {}));
+      shared = shared ? JSON.parse(JSON.stringify(shared)) : shared;
+      refs.slice().reverse().forEach(function (r) {
+        var t = r.referral.type, sx = r.referral.sex;
+        if (t === "shared") { if (shared && shared.open > 0) shared.open--; return; }
+        if (counts[t] && typeof counts[t][sx] === "number" && counts[t][sx] > 0) counts[t][sx]--;
+      });
+      return { counts: counts, shared: shared };
+    }
+
     // Profile + current counts, in the shape the board renders.
     function boardSites() {
       var cur = current();
+      var refs = reports().filter(function (r) { return r.source === "referral" && r.status === "published"; });
       return SITES.sites.map(function (p) {
         var c = cur[p.id];
         var site = {
           id: p.id, name: p.name, fullName: p.fullName, org: orgById[p.org].short, orgId: p.org, town: p.town, region: p.region,
-          population: p.population, services: p.services, contact: p.contact, reach: p.reach || {}, fit: p.fit || {}, geo: p.geo || null, beds: p.beds
+          population: p.population, services: p.services, contact: p.contact, reach: p.reach || {}, custom: !!p.custom, fit: p.fit || {}, geo: p.geo || null, beds: p.beds
         };
         if (!c) { site.noReport = true; return site; }
         var e = c.entry;
-        site.counts = e.counts || {};
+        var mine = refs.filter(function (r) { return r.referral.siteId === p.id && new Date(r.receivedAt) > new Date(c.report.receivedAt); });
+        var applied = applyReferrals(e.counts, e.shared, mine);
+        site.counts = applied.counts;
+        site.referrals = mine.map(function (r) { return { id: r.id, type: r.referral.type, sex: r.referral.sex, receivedAt: r.receivedAt, by: r.by }; });
+        e = Object.assign({}, e, { shared: applied.shared });
         if (e.shared) {
           var layout = (p.beds || []).filter(function (b) { return b.type === "shared"; })[0];
           site.shared = { types: e.shared.types || (layout ? layout.covers : ["detox", "residential"]), open: e.shared.open, label: e.shared.label || (layout && layout.label) || "detox or rehab" };
@@ -104,7 +137,7 @@
         site.qualitative = e.qualitative;
         site.notes = e.notes;
         site.sexSplitInferred = (e.flags || []).indexOf("sexSplitInferred") > -1;
-        site.report = { id: c.report.id, source: c.report.source, receivedAt: c.report.receivedAt, by: c.report.by, template: c.report.parse && c.report.parse.template, reason: c.report.reason, from: c.report.email && c.report.email.from };
+        site.report = { id: c.report.id, source: c.report.source, orgId: c.report.orgId, receivedAt: c.report.receivedAt, by: c.report.by, template: c.report.parse && c.report.parse.template, reason: c.report.reason, from: c.report.email && c.report.email.from };
         return site;
       });
     }
@@ -136,6 +169,32 @@
       return r;
     }
 
+    function refer(input) {
+      var site = siteById[input.siteId];
+      var r = { id: uid(), source: "referral", status: "published", receivedAt: nowIso(), orgId: site ? site.org : null,
+        by: "Pathways" + (input.by ? ": " + input.by : ""), referral: { siteId: input.siteId, type: input.type, sex: input.sex }, entries: [] };
+      mutate(function (st) { st.reports.push(r); });
+      return r;
+    }
+
+    // A new facility, with its first counts as a DHS update.
+    function addSite(input) {
+      var r = null;
+      mutate(function (st) {
+        st.customSites = st.customSites || [];
+        st.customOrgs = st.customOrgs || [];
+        if (input.org) st.customOrgs.push(input.org);
+        st.customSites.push(input.site);
+        if (input.entry) {
+          r = { id: uid(), source: "admin", status: "published", receivedAt: nowIso(), orgId: input.site.org,
+            by: "DHS admin" + (input.by ? ": " + input.by : ""), reason: input.reason || "New facility added", entries: [input.entry] };
+          st.reports.push(r);
+        }
+        hydrate(st);
+      });
+      return r;
+    }
+
     function decide(id, status, opts) {
       opts = opts || {};
       mutate(function (st) {
@@ -153,12 +212,13 @@
     return {
       sites: SITES, siteById: siteById, orgById: orgById,
       reports: reports, current: current, boardSites: boardSites,
-      receiveEmail: receiveEmail, submitForm: submitForm, adminUpdate: adminUpdate,
+      receiveEmail: receiveEmail, submitForm: submitForm, adminUpdate: adminUpdate, refer: refer, addSite: addSite,
+      undoReferral: function (id, opts) { decide(id, "undone", opts); },
       publish: function (id, opts) { decide(id, "published", opts); },
       reject: function (id, opts) { decide(id, "rejected", opts); },
       settings: function () { return load().settings; },
       setSetting: function (k, v) { mutate(function (st) { st.settings[k] = v; }); },
-      reset: function () { var s = seed(); write(s); },
+      reset: function () { dropCustom(); var s = seed(); write(s); },
       subscribe: function (fn) {
         listeners.push(fn);
         if (root.addEventListener) root.addEventListener("storage", function (e) { if (e.key === KEY) fn(); });

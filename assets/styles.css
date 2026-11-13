@@ -401,3 +401,88 @@ a.src-chip svg { fill: none; }
 .ml-detail .contact { border-top: 1px solid var(--ash); }
 .pin.sel { outline: 3px solid var(--blue); outline-offset: 2px; transform: scale(1.15); }
 @media (max-width: 760px) { .findbar .mapsearch { flex-basis: 100%; } }
+
+/* ===== Nov 13: bed breakdown, plain-text labels, referrals ===== */
+/* Bed table — the breakdown is the main content of a card */
+.bedwrap { grid-column: 2 / 4; }
+.beds { border-collapse: collapse; width: 100%; max-width: 560px; font-variant-numeric: tabular-nums; }
+.beds th, .beds td { padding: 8px 12px; border-bottom: 1px solid var(--ash); text-align: right; vertical-align: middle; }
+.beds thead th { font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--slate); padding-top: 2px; padding-bottom: 6px; border-bottom: 2px solid var(--ash); }
+.beds thead th:first-child, .beds tbody th, .beds tfoot th { text-align: left; padding-left: 10px; }
+.beds tbody th { font-size: 15px; font-weight: 500; color: var(--black); }
+.beds td { font-size: 22px; font-weight: 500; line-height: 1.15; color: var(--black); }
+.beds td.zero { color: var(--stone); }
+.beds td.nr, .beds td.ns, .beds td.na { font-size: 13px; font-weight: 400; color: var(--stone); }
+.beds td[colspan] { text-align: left; font-size: 14px; }
+.beds td.yes { font-size: 15px; font-weight: 500; }
+.beds .tot { font-weight: 700; }
+.beds .sub { display: block; font-size: 12px; font-weight: 400; color: var(--stone); letter-spacing: 0; text-transform: none; }
+.beds tfoot th, .beds tfoot td { border-bottom: 0; font-size: 15px; font-weight: 700; padding-top: 10px; }
+.beds tfoot td { font-size: 18px; }
+.beds tr.hit th, .beds tr.hit td { background: var(--green-tint); }
+.beds tr.hit th { box-shadow: inset 4px 0 0 var(--dark-blue); }
+.beds .hc { background: var(--smoke); }
+.beds thead th.hc { color: var(--dark-blue); }
+.beds tr.hit .hc { background: #C4F1E6; }
+.refmark { font-size: 12px; font-weight: 700; color: var(--brown); margin-left: 3px; vertical-align: super; }
+.bed-none { margin: 4px 0 0; font-size: 15px; }
+.bed-notes { margin: 8px 0 0; padding-left: 18px; font-size: 13px; color: var(--slate); }
+.site .meta { margin: 4px 0 0; font-size: 13.5px; font-weight: 500; color: var(--dark-blue); }
+
+/* Updated / source line (plain text; the only actions are links and buttons) */
+.side { min-width: 210px; }
+.upd { margin: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; font-size: 13px; }
+.upd-time { font-weight: 700; color: var(--black); }
+.upd-time.aging { color: #7A5300; }
+.upd-time.stale { color: #9B2C1F; }
+.upd-src { color: var(--slate); display: inline-flex; align-items: center; gap: 4px; }
+.upd-src svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.upd-ref { margin: 4px 0 0; font-size: 13px; font-weight: 500; color: #7A5300; }
+.refer-btn { margin-top: 6px; }
+.upd-cell .upd-time, .upd-cell .upd-src { display: block; }
+.ml-upd { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 8px; }
+.ml-upd .upd { align-items: flex-start; }
+.feed-top .upd-time { font-weight: 500; }
+
+/* Tags become plain text everywhere they aren't an action */
+.fr, .status-chip { background: none !important; padding: 0; border-radius: 0; border: 0; }
+.fr.fresh { color: var(--black); }
+.fr.aging { color: #7A5300; }
+.fr.stale { color: #9B2C1F; }
+.status-chip.st-review { color: #7A5300; }
+.status-chip.st-rejected, .status-chip.st-undone { color: #9B2C1F; }
+span.src-chip { background: none; border: 0; padding: 0; color: var(--slate); font-weight: 500; }
+.pill { background: none; border: 0; padding: 0; margin-right: 10px; border-radius: 0; color: var(--slate); }
+.pill.warn { background: none; color: #7A5300; }
+.srcdlg-kind { margin: 0; display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--slate); }
+.srcdlg-kind svg { fill: none; stroke: currentColor; stroke-width: 2; }
+
+/* Referral dialog + toast */
+.refer-opts { border: 0; padding: 0; margin: 12px 0; display: flex; flex-direction: column; gap: 6px; }
+.refer-opt { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 8px 12px; border: 1px solid var(--ash); border-radius: 8px; font-size: 15px; cursor: pointer; }
+.refer-opt:has(input:checked) { border-color: var(--blue); background: var(--smoke); }
+.refer-opt input { width: 18px; height: 18px; accent-color: var(--blue); }
+.toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 50; display: flex; align-items: center; gap: 14px; max-width: calc(100% - 32px); background: var(--dark-blue); color: var(--white); padding: 10px 12px 10px 16px; border-radius: 10px; box-shadow: 0 6px 20px rgba(18, 18, 33, .3); font-size: 14px; }
+.toast[hidden] { display: none; }
+.toast .btn { background: var(--white); border-color: var(--white); }
+
+@media (max-width: 760px) {
+  .bedwrap { grid-column: 1 / -1; }
+  .side { min-width: 0; flex-wrap: wrap; align-items: flex-end; }
+  .upd { align-items: flex-start; }
+  .beds th, .beds td { padding: 8px 8px; }
+  .beds td { font-size: 20px; }
+}
+
+/* Admin: add a facility */
+.sites-bar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 12px; }
+.addsite .form-sub { margin: 18px 0 8px; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--dark-blue); }
+.row3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 14px; }
+.radio-row { display: flex; flex-wrap: wrap; gap: 4px 18px; min-height: 44px; align-items: center; }
+.lv-grid { border: 0; padding: 0; margin: 0 0 8px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 14px; }
+.lv-grid .help { color: var(--stone); font-size: 12.5px; }
+@media (max-width: 760px) { .row3, .lv-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (min-width: 761px) {
+  .card > .side { grid-column: 3; grid-row: 1 / span 2; }
+  .card > .bedwrap { grid-column: 2 / 3; grid-row: 2; }
+}

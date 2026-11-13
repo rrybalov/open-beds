@@ -27,13 +27,23 @@
   var SOURCE = {
     email: { label: "Email", long: "Provider email" },
     form: { label: "Provider form", long: "Provider update form" },
-    admin: { label: "DHS update", long: "Updated by DHS staff" }
+    admin: { label: "DHS update", long: "Updated by DHS staff" },
+    referral: { label: "Referral", long: "Referral marked by Pathways" }
   };
   var ICON = {
     email: '<svg aria-hidden="true" viewBox="0 0 24 24" width="14" height="14"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>',
     form: '<svg aria-hidden="true" viewBox="0 0 24 24" width="14" height="14"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>',
-    admin: '<svg aria-hidden="true" viewBox="0 0 24 24" width="14" height="14"><path d="M12 3 4 6v6c0 4.4 3.4 8.3 8 9 4.6-.7 8-4.6 8-9V6Z"/></svg>'
+    admin: '<svg aria-hidden="true" viewBox="0 0 24 24" width="14" height="14"><path d="M12 3 4 6v6c0 4.4 3.4 8.3 8 9 4.6-.7 8-4.6 8-9V6Z"/></svg>',
+    referral: '<svg aria-hidden="true" viewBox="0 0 24 24" width="14" height="14"><path d="M5 12h12M13 6l6 6-6 6"/></svg>'
   };
+  // How the board says where a count came from, as plain text.
+  function sourceText(report, S) {
+    var org = report.orgId && S && S.orgById[report.orgId] ? S.orgById[report.orgId].short : "the provider";
+    if (report.source === "email") return "from " + org + "’s email";
+    if (report.source === "form") return "on " + org + "’s update form";
+    if (report.source === "admin") return "by DHS staff" + (report.by && report.by.indexOf(": ") > -1 ? " (" + report.by.split(": ")[1] + ")" : "");
+    return "";
+  }
   // With a report id the chip is a button that opens the source (the email itself, the form submission, or the DHS edit).
   function sourceChip(source, reportId, siteId) {
     var s = SOURCE[source] || { label: source };
@@ -70,6 +80,17 @@
   }
 
   var dlg = null, returnFocus = null;
+  // Shared modal for pages without their own (board): OB.openDialog(html) / OB.closeDialog().
+  function openDialog(html, label) {
+    returnFocus = document.activeElement;
+    ensureDialog();
+    dlg.firstChild.setAttribute("aria-labelledby", label || "srcdlg-h");
+    dlg.firstChild.innerHTML = html;
+    dlg.hidden = false;
+    var first = dlg.firstChild.querySelector("input:checked, input, select, button");
+    if (first) first.focus();
+    return dlg.firstChild;
+  }
   function ensureDialog() {
     if (dlg) return dlg;
     var wrap = document.createElement("div");
@@ -82,13 +103,14 @@
     dlg = wrap;
     return dlg;
   }
-  function closeSource() { dlg.hidden = true; dlg.firstChild.innerHTML = ""; if (returnFocus) returnFocus.focus(); }
+  function closeSource() { dlg.hidden = true; dlg.firstChild.innerHTML = ""; if (returnFocus && returnFocus.isConnected) returnFocus.focus(); }
 
   function openSource(report, siteId, S) {
     var site = siteId ? S.siteById[siteId] : null;
     var org = report.orgId && S.orgById[report.orgId] ? S.orgById[report.orgId].short : "Unknown sender";
     var f = when(report.receivedAt);
-    var title = report.source === "email" ? "Email from " + org : report.source === "form" ? "Provider form — " + org : "DHS update — " + (site ? site.name : org);
+    var title = report.source === "email" ? "Email from " + org : report.source === "form" ? "Provider form — " + org :
+      report.source === "referral" ? "Referral to " + (S.siteById[report.referral.siteId] || { name: "a site" }).name : "DHS update — " + (site ? site.name : org);
     var meta = [];
     if (report.source === "email") {
       meta.push(["From", esc(report.email.from)], ["Subject", esc(report.email.subject)]);
@@ -101,23 +123,28 @@
     }
     if (report.decidedBy && report.source === "email") meta.push(["Published", esc(report.decidedBy) + (report.decidedAt ? ", " + esc(when(report.decidedAt).label) : "")]);
     var entries = report.entries.slice().sort(function (a, b) { return (b.siteId === siteId) - (a.siteId === siteId); });
-    var took = entries.map(function (e) {
+    if (report.source === "referral") {
+      var rf = report.referral;
+      entries = [];
+      meta.push(["Status", report.status === "undone" ? "Undone" + (report.decidedBy ? " by " + esc(report.decidedBy) : "") : "Counted on the board until the provider’s next update"]);
+      var tookRef = "<li><b>" + esc((S.siteById[rf.siteId] || { name: rf.siteId }).name) + "</b> — one " + esc(rf.type === "shared" ? "detox or rehab" : TYPE_LABEL[rf.type].toLowerCase()) + " bed" +
+        (rf.sex === "male" ? " (men)" : rf.sex === "female" ? " (women)" : "") + " taken off the count</li>";
+    }
+    var took = (tookRef || "") + entries.map(function (e) {
       var name = e.siteId && S.siteById[e.siteId] ? S.siteById[e.siteId].name : "Unassigned";
       var mine = e.siteId === siteId;
       return "<li" + (mine ? ' class="mine"' : "") + "><b>" + esc(name) + "</b> — " + esc(entrySummary(e)) + ((e.notes || []).length ? " · " + esc(e.notes.join("; ")) : "") + "</li>";
     }).join("");
-    var warns = report.parse ? (report.parse.warnings || []).map(function (w) { return '<span class="pill warn">' + esc(w) + "</span>"; }).join("") : "";
+    var warns = report.parse ? (report.parse.warnings || []).map(function (w) { return "<li>" + esc(w) + "</li>"; }).join("") : "";
     var body = report.source === "email"
       ? '<h3 class="srcdlg-sub">The email</h3><pre class="mailbody">' + highlightBody(report.email.body, site, report.entries.length === 1) + "</pre>" +
         (site ? '<p class="conf">Highlighted: the lines the board read for ' + esc(site.name) + ".</p>" : "")
       : "";
-    var html = '<div class="srcdlg-h"><div>' + sourceChip(report.source) + '<h2 id="srcdlg-h">' + esc(title) + '</h2></div><button type="button" class="btn small" data-close>Close</button></div>' +
+    var html = '<div class="srcdlg-h"><div><p class="srcdlg-kind">' + (ICON[report.source] || "") + esc((SOURCE[report.source] || {}).long || "") + '</p><h2 id="srcdlg-h">' + esc(title) + '</h2></div><button type="button" class="btn small" data-close>Close</button></div>' +
       '<dl class="srcdlg-meta">' + meta.map(function (m) { return "<dt>" + m[0] + "</dt><dd>" + m[1] + "</dd>"; }).join("") + "</dl>" +
       '<h3 class="srcdlg-sub">What the board took from it</h3><ul class="srcdlg-took">' + took + "</ul>" +
-      (warns ? '<div class="split">' + warns + "</div>" : "") + body;
-    ensureDialog();
-    dlg.firstChild.innerHTML = html;
-    dlg.hidden = false;
+      (warns ? '<h3 class="srcdlg-sub">Parser warnings</h3><ul class="srcdlg-took">' + warns + "</ul>" : "") + body;
+    openDialog(html);
     dlg.querySelector("[data-close]").focus();
   }
 
@@ -129,7 +156,6 @@
     var id = b.getAttribute("data-report");
     var r = S.reports().filter(function (x) { return x.id === id; })[0];
     if (!r) return;
-    returnFocus = b;
     openSource(r, b.getAttribute("data-site"), S);
   });
 
@@ -151,5 +177,5 @@
     return parts.join("; ") || "No counts";
   }
 
-  root.OB = { esc: esc, when: when, timeOf: timeOf, sourceChip: sourceChip, sourceLink: sourceLink, SOURCE: SOURCE, ICON: ICON, plural: plural, TYPE_LABEL: TYPE_LABEL, SEX_LABEL: SEX_LABEL, entrySummary: entrySummary, TZ: TZ };
+  root.OB = { esc: esc, when: when, timeOf: timeOf, sourceChip: sourceChip, sourceLink: sourceLink, sourceText: sourceText, openDialog: openDialog, closeDialog: function () { if (dlg) closeSource(); }, SOURCE: SOURCE, ICON: ICON, plural: plural, TYPE_LABEL: TYPE_LABEL, SEX_LABEL: SEX_LABEL, entrySummary: entrySummary, TZ: TZ };
 })(window);

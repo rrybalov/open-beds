@@ -68,7 +68,10 @@ Either way: drop attachments, keep the text body for audit, and alert an admin w
 | POST | `/api/reports/admin` | Admin | County SSO |
 | GET | `/api/reports?status=review` | Admin | County SSO |
 | POST | `/api/reports/{id}/publish` · `/reject` | Admin | County SSO |
-| GET/PUT | `/api/sites`, `/api/orgs` | Admin | County SSO |
+| POST | `/api/referrals` · `/api/referrals/{id}/undo` | Board (intake staff) | Staff sign-in |
+| GET/PUT/POST | `/api/sites`, `/api/orgs` (POST adds a facility) | Admin | County SSO |
+
+**Referrals** are reports with `source: "referral"` and no counts: `{ siteId, type, sex, by }`. The board takes one bed off a site's latest count for each referral marked *after* that count arrived. When the provider sends a new count, older referrals stop applying — the provider's number already reflects them. Undo marks the referral `undone`. The board should poll `/api/board` (or use server-sent events) every 30–60 seconds so a referral reaches every viewer quickly.
 
 Store: `orgs` (with sender domains), `sites` (profile + bed layout), `reports` (append-only, entries as JSON), `provider_links` (token, org, created, revoked).
 
@@ -85,3 +88,4 @@ Store: `orgs` (with sender domains), `sites` (profile + bed layout), `reports` (
 - Data lives in the viewer’s browser (`localStorage`), seeded from the 7 sample emails and re-timed to “today.”
 - No sign-in. Anyone can open the admin page, but changes affect only their own browser.
 - “Simulate an email” stands in for the alias.
+- **Referrals and added facilities reach only other tabs in the same browser.** “Everyone looking at the dashboard” needs the API above — a static GitHub Pages site has nowhere shared to write.

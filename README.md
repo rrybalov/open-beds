@@ -12,9 +12,9 @@ Counts reach the board three ways:
 
 | Page | For | What it does |
 |---|---|---|
-| [`index.html`](index.html) | Pathways intake staff | **Find a bed** (filter by bed type, sex, age, LOCA level and payment; each card shows who the site takes), with a **List / Map** toggle (the same filters drive both; type an address or ZIP to sort by distance; select a pin to open that provider's availability in the side list). Every card ends with **Contact admissions**: call, email intake, directions, website. **All sites** grid, **Updates** feed. |
+| [`index.html`](index.html) | Pathways intake staff | **Find a bed** (filter by bed type, sex, age, LOCA level and payment; each card shows who the site takes), with a **List / Map** toggle (the same filters drive both; type an address or ZIP to sort by distance; select a pin to open that provider's availability in the side list). Each card shows the bed breakdown (type × men / women / total), when and where the count came from with **View source**, a **Mark a referral** action that takes one bed off the count for everyone, and **Contact admissions**: call, email intake, directions, website. **All sites** grid, **Updates** feed. |
 | [`update.html`](update.html) | Providers | Enter open beds per site. A personal link (`update.html?org=gaiser`) preselects the provider. |
-| [`admin.html`](admin.html) | DHS staff | **Email inbox** with review queue and an email simulator, **Sites** with manual updates, **Activity** log, **Settings** |
+| [`admin.html`](admin.html) | DHS staff | **Email inbox** with review queue and an email simulator, **Sites** with manual updates and **Add a facility** (every bed type available), **Activity** log including referrals, **Settings** |
 
 ## Run it
 

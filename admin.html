@@ -67,7 +67,10 @@
     </section>
 
     <section id="p-sites" role="tabpanel" aria-labelledby="t-sites" hidden>
-      <label class="check" style="margin-bottom:10px"><input type="checkbox" id="stale-only"> Only sites not updated in 24 hours</label>
+      <div class="sites-bar">
+        <label class="check"><input type="checkbox" id="stale-only"> Only sites not updated in 24 hours</label>
+        <button type="button" class="btn primary" id="add-site">Add a facility</button>
+      </div>
       <div class="gridwrap"><table class="sitetbl"><caption class="sr">Sites and their latest update</caption>
         <thead><tr><th scope="col">Site</th><th scope="col">Last update</th><th scope="col">Current counts</th><th scope="col"><span class="sr">Action</span></th></tr></thead>
         <tbody id="site-rows"></tbody></table></div>

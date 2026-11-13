@@ -13,6 +13,14 @@ function test(name, fn) { fn(); passed++; console.log("  ✓ " + name); }
 
 console.log("parser");
 
+test("Pyramid prose → Silvermist Pittsburgh, Silvermist Pocono (MH, women) and Providence House", function () {
+  var r = byKey["pyramid-silvermist"];
+  assert.deepStrictEqual(entry(r, "silvermist-pgh").counts, { residential: { male: 3 } });
+  assert.deepStrictEqual(entry(r, "silvermist-pocono").counts, { residential: { female: 4 } });
+  assert.deepStrictEqual(entry(r, "providence-house").counts, { php: { any: 1 } });
+});
+
+
 test("Acadia table → 11 sites, male/female inferred, NA kept", function () {
   var r = byKey["acadia-pac"];
   assert.strictEqual(r.confidence, "high");

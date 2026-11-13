@@ -22,6 +22,7 @@
     if (!sexCols.length) sexCols = ["any"];
     sexCols.sort(function (a, b) { return ["male", "female", "any"].indexOf(a) - ["male", "female", "any"].indexOf(b); });
 
+    var colName = function (s) { return s === "any" && sexCols.length > 1 ? "Sex not given" : SEX_COL[s]; };
     function input(id, label, v) {
       var pre = opts.mode === "admin" ? ' value="' + esc(valStr(v)) + '"' : "";
       var ph = opts.mode === "provider" && valStr(v) !== "" ? ' placeholder="' + esc(valStr(v)) + '"' : ' placeholder="—"';
@@ -47,7 +48,7 @@
       rows += '<tr><th scope="row">' + esc(OB.TYPE_LABEL[b.type]) + "</th>" + sexCols.map(function (s) {
         if (b.sexes.indexOf(s) < 0) return "<td></td>";
         var v = counts[b.type] ? counts[b.type][s] : undefined;
-        return "<td>" + input(p + "-" + b.type + "-" + s, site.name + ", " + OB.TYPE_LABEL[b.type] + ", " + SEX_COL[s].toLowerCase() + " — open beds", v) + "</td>";
+        return "<td>" + input(p + "-" + b.type + "-" + s, site.name + ", " + OB.TYPE_LABEL[b.type] + ", " + colName(s).toLowerCase() + " — open beds", v) + "</td>";
       }).join("") + "</tr>";
     });
 
@@ -57,7 +58,7 @@
     var noteVal = opts.mode === "admin" && e && e.notes ? e.notes.join("; ") : "";
     return '<section class="site-edit" data-site="' + esc(site.id) + '"><div class="site-edit-h"><h3>' + esc(site.name) +
       (site.fullName && site.fullName !== site.name ? ' <span class="full-name">' + esc(site.fullName) + "</span>" : "") + "</h3>" + last + "</div>" +
-      '<table class="bedtbl"><thead><tr><th scope="col">Bed type</th>' + sexCols.map(function (s) { return '<th scope="col">' + SEX_COL[s] + "</th>"; }).join("") + "</tr></thead><tbody>" + rows + "</tbody></table>" +
+      '<table class="bedtbl"><thead><tr><th scope="col">Bed type</th>' + sexCols.map(function (s) { return '<th scope="col">' + colName(s) + "</th>"; }).join("") + "</tr></thead><tbody>" + rows + "</tbody></table>" +
       '<div class="field" style="margin:10px 0 0"><label class="lbl" for="' + p + '-notes">Note for intake staff <span class="help">(optional)</span></label>' +
       '<input class="input wide" id="' + p + '-notes" type="text" maxlength="160" placeholder="e.g. 2 discharges expected this afternoon" value="' + esc(noteVal) + '"></div>' +
       '<div class="err" id="' + p + '-err" role="alert" hidden></div></section>';

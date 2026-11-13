@@ -11,7 +11,7 @@
   var TYPE_LABEL = OB.TYPE_LABEL;
   var SEX_SHORT = { male: "M", female: "F", any: "" };
 
-  var state = { type: "any", sex: "any", age: "adult", loca: "any", pay: "any", q: "", mh: false, recentOnly: false, view: "find", mode: "list", sort: "region", origin: null, selected: null };
+  var state = { type: "any", sex: "any", age: "adult", loca: "any", pay: "any", q: "", sudOnly: false, recentOnly: false, view: "find", mode: "list", sort: "region", origin: null, selected: null };
   var PAY = {};
   S.sites.payTypes.forEach(function (p) { PAY[p[0]] = { label: p[1], short: p[2] }; });
   // true = known to take it, false = known not to, undefined = not on file
@@ -19,7 +19,7 @@
   var LEVEL = {};
   S.sites.levels.forEach(function (l) { LEVEL[l[0]] = { short: l[1], long: l[2] }; });
   var KNOWN = [["pregnancy", "pregnancy"], ["moud", "MOUD"], ["medical", "medical limits"], ["legal", "legal history"]];
-  var SOURCE_LABEL = { worksheet: "Bed Search Worksheet", email: "provider email", website: "provider website" };
+  var SOURCE_LABEL = { worksheet: "Bed Search Worksheet", email: "provider email", website: "provider website", admin: "DHS entry" };
   function $(id) { return document.getElementById(id); }
   function plural(n, a, b) { return OB.plural(n, a, b); }
 
@@ -85,7 +85,7 @@
 
   function passesFilters(site) {
     if (state.age !== "all" && site.population !== state.age) return false;
-    if (!state.mh && site.services.indexOf("SUD") < 0) return false;
+    if (state.sudOnly && site.services.indexOf("SUD") < 0) return false;
     if (state.recentOnly && (site.noReport || OB.when(site.report.receivedAt).hours >= 24)) return false;
     if (state.loca !== "any" && !((site.fit.levels || []).indexOf(state.loca) > -1)) return false;
     if (state.pay !== "any" && payStatus(site) === false) return false;
@@ -166,39 +166,123 @@
     return TYPE_LABEL[state.type].toLowerCase() + sex;
   }
 
-  function splitPills(site, a) {
-    var out = [];
-    if (state.type === "any") {
-      a.per.forEach(function (p) {
-        if (p.type === "shared") out.push('<span class="pill strong">' + p.n + " " + esc(p.label) + "</span>");
-        else if (p.label) out.push('<span class="pill strong">' + TYPE_LABEL[p.type] + " — " + esc(p.label) + "</span>");
-        else {
-          var detail = (p.parts && p.parts.length > 1) ? " (" + p.parts.map(function (x) { return x.n + " " + SEX_SHORT[x.sex]; }).join(" · ") + ")" : "";
-          out.push('<span class="pill strong">' + TYPE_LABEL[p.type] + " " + p.n + detail + "</span>");
-        }
-      });
-    } else if (a.parts && a.parts.length) {
-      a.parts.forEach(function (p) { out.push('<span class="pill strong">' + p.n + " " + (p.sex === "male" ? "male" : "female") + "</span>"); });
+  // ---------- bed breakdown ----------
+  // Every bed type the site offers, with men / women / total. The filtered type and sex are highlighted.
+  function refsFor(site, type, sex) { return (site.referrals || []).filter(function (r) { return r.type === type && r.sex === sex; }).length; }
+  function refMark(n) {
+    return n ? '<span class="refmark" title="' + n + " referral" + (n > 1 ? "s" : "") + ' marked since the provider’s count">−' + n + '<span class="sr"> after referrals</span></span>' : "";
+  }
+  function numCell(site, type, sex, v, hc) {
+    var cls = hc ? " hc" : "";
+    if (v === undefined) return '<td class="nr' + cls + '"><span aria-hidden="true">—</span><span class="sr">not given</span></td>';
+    if (v === "na") return '<td class="na' + cls + '">N/A</td>';
+    return '<td class="' + (v > 0 ? "open" : "zero") + cls + '">' + v + refMark(refsFor(site, type, sex)) + "</td>";
+  }
+  function bedTable(site) {
+    if (site.noReport) return '<p class="bed-none">No report yet — call to check.</p>';
+    if (isNoCount(site)) {
+      var q = (site.qualitative || []).filter(function (x) { return x.types.indexOf("unknown") > -1; })[0];
+      return '<p class="bed-none"><b>' + esc(q ? q.label : "Beds available") + "</b> — no bed type or count given. Call to ask.</p>";
     }
-    if (a.label && (a.state === "avail" || state.type === "any")) out.push('<span class="pill">' + esc(a.label) + "</span>");
-    if (a.note) out.push('<span class="pill warn">' + esc(a.note) + "</span>");
-    (a.notes || []).forEach(function (n) { out.push('<span class="pill warn">' + esc(n) + "</span>"); });
-    if (state.type === "any" && site.shared && state.sex === "any") out.push('<span class="pill warn">Not split between detox and rehab</span>');
-    if (site.sexSplitInferred && (state.sex !== "any" || (a.parts && a.parts.length > 1) || state.type === "any")) out.push('<span class="pill warn">Male/female read from unlabeled columns</span>');
-    if (site.population === "adolescent") out.push('<span class="pill tag">Adolescent unit</span>');
-    if (state.pay !== "any") out.push(payStatus(site) === true
-      ? '<span class="pill pay-yes">Takes ' + esc(PAY[state.pay].short) + "</span>"
-      : '<span class="pill warn">' + esc(PAY[state.pay].short) + " not on file — ask</span>");
-    (site.notes || []).forEach(function (n) { out.push('<span class="pill">' + esc(n) + "</span>"); });
-    return out.join("");
+    var counts = site.counts || {};
+    var layout = (site.beds || []).map(function (b) { return b.type; });
+    Object.keys(counts).forEach(function (t) { if (layout.indexOf(t) < 0 && !(site.shared && site.shared.types.indexOf(t) > -1)) layout.push(t); });
+    var order = ["detox", "shared", "residential", "php", "outpatient"];
+    layout.sort(function (x, y) { return order.indexOf(x) - order.indexOf(y); });
+    var hm = state.sex === "male", hf = state.sex === "female";
+    var sumM = 0, sumF = 0, sumT = 0, numericRows = 0;
+    var rows = layout.map(function (t) {
+      var hit = state.type !== "any" && (state.type === t || (t === "shared" && site.shared && site.shared.types.indexOf(state.type) > -1));
+      var tr = "<tr" + (hit ? ' class="hit"' : "") + ">";
+      if (t === "shared") {
+        var n = site.shared ? site.shared.open : undefined;
+        if (typeof n === "number") { sumT += n; numericRows++; }
+        return tr + '<th scope="row">Detox or rehab<span class="sub">one count for both</span></th><td colspan="2" class="ns">Sex not given</td>' +
+          (typeof n === "number" ? '<td class="tot ' + (n > 0 ? "open" : "zero") + '">' + n + refMark(refsFor(site, "shared", "any")) + "</td>" : '<td class="nr tot">—</td>') + "</tr>";
+      }
+      if (t === "outpatient") {
+        var yes = (site.qualitative || []).some(function (x) { return x.types.indexOf("outpatient") > -1; });
+        var no = counts.outpatient && counts.outpatient.any === 0;
+        return tr + '<th scope="row">Outpatient</th><td colspan="3" class="' + (yes ? "yes" : no ? "zero" : "nr") + '">' + (yes ? "Accepting new clients" : no ? "Not accepting" : "Not in this report") + "</td></tr>";
+      }
+      var c = counts[t];
+      if (!c) {
+        var qa = (site.qualitative || []).filter(function (x) { return x.types.indexOf(t) > -1; })[0];
+        return tr + '<th scope="row">' + TYPE_LABEL[t] + '</th><td colspan="3" class="' + (qa ? "yes" : "nr") + '">' + (qa ? esc(qa.label) + " — no count given" : "Not in this report") + "</td></tr>";
+      }
+      var hasSex = c.male !== undefined || c.female !== undefined;
+      var tot = ["male", "female", "any"].reduce(function (x, k) { return typeof c[k] === "number" ? x + c[k] : x; }, 0);
+      var allNa = ["male", "female", "any"].every(function (k) { return c[k] === undefined || c[k] === "na"; });
+      numericRows++;
+      if (typeof c.male === "number") sumM += c.male;
+      if (typeof c.female === "number") sumF += c.female;
+      sumT += tot;
+      var cells = hasSex
+        ? numCell(site, t, "male", c.male, hm) + numCell(site, t, "female", c.female, hf)
+        : '<td colspan="2" class="ns">Sex not given</td>';
+      var totCell = allNa ? '<td class="na tot">N/A</td>' : '<td class="tot ' + (tot > 0 ? "open" : "zero") + '">' + tot +
+        (!hasSex ? refMark(refsFor(site, t, "any")) : "") +
+        (hasSex && typeof c.any === "number" ? '<span class="sub">incl. ' + c.any + " sex not given</span>" : "") + "</td>";
+      return tr + '<th scope="row">' + TYPE_LABEL[t] + "</th>" + cells + totCell + "</tr>";
+    }).join("");
+    var foot = numericRows > 1
+      ? '<tfoot><tr><th scope="row">All open</th><td' + (hm ? ' class="hc"' : "") + ">" + sumM + "</td><td" + (hf ? ' class="hc"' : "") + ">" + sumF + '</td><td class="tot">' + sumT + "</td></tr></tfoot>"
+      : "";
+    return '<table class="beds"><caption class="sr">Open beds at ' + esc(site.name) + " by type</caption>" +
+      '<thead><tr><th scope="col">Bed type</th><th scope="col"' + (hm ? ' class="hc"' : "") + '>Men</th><th scope="col"' + (hf ? ' class="hc"' : "") + '>Women</th><th scope="col">Total</th></tr></thead>' +
+      "<tbody>" + rows + "</tbody>" + foot + "</table>";
+  }
+  // Plain-text notes under the table (no tags).
+  function bedNotes(site) {
+    var out = [];
+    if (site.sexSplitInferred) out.push("Men and women read from unlabeled columns in the provider’s table.");
+    if (state.pay !== "any") out.push(payStatus(site) === true ? "On file as taking " + PAY[state.pay].short + "." : PAY[state.pay].short + " isn’t on file — ask when you call.");
+    (site.notes || []).forEach(function (n) { out.push("Provider note: " + n); });
+    return out.length ? '<ul class="bed-notes">' + out.map(function (n) { return "<li>" + esc(n) + "</li>"; }).join("") + "</ul>" : "";
+  }
+  function siteMeta(site) {
+    var m = [];
+    if (site.services.indexOf("SUD") < 0) m.push("Mental health only — no substance use treatment");
+    if (site.population === "adolescent") m.push("Adolescent unit");
+    if (site.custom) m.push("Added by DHS");
+    return m.length ? '<p class="meta">' + esc(m.join(" · ")) + "</p>" : "";
+  }
+  function dayWord(label) { return label.replace(/^Today /, "today ").replace(/^Yesterday /, "yesterday "); }
+  // When the count came in, from where, a link to the source, and any referrals since.
+  function updatedBlock(site) {
+    if (site.noReport) return '<p class="upd"><span class="upd-time stale">No report yet</span></p>';
+    var f = OB.when(site.report.receivedAt);
+    var html = '<p class="upd"><span class="upd-time ' + f.level + '">Updated ' + esc(dayWord(f.label)) + (f.level !== "fresh" ? " (" + esc(f.age) + ")" : "") + "</span>" +
+      '<span class="upd-src">' + esc(OB.sourceText(site.report, S)) + "</span>" +
+      '<button type="button" class="linkbtn" data-report="' + esc(site.report.id) + '" data-site="' + esc(site.id) + '" aria-haspopup="dialog">View source<span class="sr"> for ' + esc(site.name) + "</span></button></p>";
+    var refs = site.referrals || [];
+    if (refs.length) {
+      html += '<p class="upd-ref">' + plural(refs.length, "referral") + " marked since — last " + esc(dayWord(OB.when(refs[0].receivedAt).label)) +
+        ' <button type="button" class="linkbtn" data-undo="' + esc(refs[0].id) + '">Undo<span class="sr"> the last referral to ' + esc(site.name) + "</span></button></p>";
+    }
+    return html;
+  }
+  function referOptions(site) {
+    var out = [], order = ["detox", "shared", "residential", "php"];
+    Object.keys(site.counts || {}).forEach(function (t) {
+      if (t === "outpatient") return;
+      ["male", "female", "any"].forEach(function (sx) { var v = site.counts[t][sx]; if (typeof v === "number" && v > 0) out.push({ type: t, sex: sx, n: v }); });
+    });
+    if (site.shared && site.shared.open > 0) out.push({ type: "shared", sex: "any", n: site.shared.open });
+    return out.sort(function (a, b) { return order.indexOf(a.type) - order.indexOf(b.type); });
+  }
+  function referButton(site) {
+    if (site.noReport || !referOptions(site).length) return "";
+    return '<button type="button" class="btn small refer-btn" data-refer="' + esc(site.id) + '" aria-haspopup="dialog">Mark a referral<span class="sr"> to ' + esc(site.name) + "</span></button>";
   }
 
   // "Who they take": levels of care (to match the LOCA), population, exclusions, prerequisites, payment.
   function levelChips(f) {
     if (!f.levels || !f.levels.length) return '<span class="fit-none">Not on file</span>';
     return f.levels.map(function (c) {
-      return '<span class="lvl-chip' + (state.loca === c ? " hit" : "") + '" title="' + esc(LEVEL[c].long) + '">' + esc(LEVEL[c].short) + "</span>";
-    }).join("");
+      var t = esc(LEVEL[c].short);
+      return state.loca === c ? '<strong class="lvl-hit" title="' + esc(LEVEL[c].long) + '">' + t + "</strong>" : '<span title="' + esc(LEVEL[c].long) + '">' + t + "</span>";
+    }).join(" · ");
   }
   function fitSection(site) {
     var f = site.fit || {};
@@ -239,13 +323,6 @@
       "Is a bed still available, and what do you need from us to send a referral?\n\nThank you,\n";
     return "mailto:" + em.to + "?subject=" + encodeURIComponent("Bed availability — " + site.name + " (Pathways)") + "&body=" + encodeURIComponent(body);
   }
-  // The Email tag composes an email to the provider; Form and DHS tags stay labels.
-  function sourceTag(site) {
-    if (!site.report) return "";
-    var m = site.report.source === "email" ? mailto(site) : null;
-    if (!m) return OB.sourceChip(site.report.source);
-    return '<a class="src-chip src-email" href="' + esc(m) + '" title="Email ' + esc(site.name) + ' admissions">' + OB.ICON.email + 'Email<span class="sr"> ' + esc(site.name) + " admissions</span></a>";
-  }
   function contactStrip(site) {
     var r = site.reach || {}, m = mailto(site), em = intakeEmail(site), bits = [];
     if (r.phone) bits.push('<a class="cbtn primary" href="' + tel(r.phone) + '" aria-label="Call ' + esc(site.name) + " admissions, " + esc(r.phone) + '">' + PHONE_SVG + esc(r.phone) + "</a>");
@@ -264,16 +341,16 @@
   }
 
   function card(site, a) {
-    var f = OB.when(site.report.receivedAt);
     var box;
     if (a.state === "open") box = '<div class="count open"><b>' + a.n + "</b><span>" + esc(countLabel(a)) + "</span></div>";
-    else if (a.state === "avail") box = '<div class="count avail"><b>Available</b><span>no count given</span></div>';
-    else box = '<div class="count full"><b>Full</b><span>' + (state.type === "any" ? "all reported beds" : esc(countLabel(a))) + "</span></div>";
-    return '<article class="card">' + box +
+    else if (a.state === "avail") box = '<div class="count avail"><b>Yes</b><span>available, no count</span></div>';
+    else box = '<div class="count full"><b>0</b><span>' + (state.type === "any" ? "open beds" : esc(countLabel(a))) + "</span></div>";
+    return '<article class="card" id="card-' + esc(site.id) + '">' + box +
       '<div class="site"><h3>' + esc(site.name) + (site.fullName && site.fullName !== site.name ? ' <span class="full-name">' + esc(site.fullName) + "</span>" : "") + "</h3>" +
       '<div class="where">' + esc(site.org) + " · " + esc(site.town) + " · " + esc(regionLabel(site)) + (state.origin ? " · " + esc(distLabel(site)) : "") + "</div>" +
-      '<div class="split">' + splitPills(site, a) + "</div></div>" +
-      '<div class="side"><span class="fr ' + f.level + '" title="' + esc(f.age) + '">' + esc(f.label) + "</span>" + sourceTag(site) + "</div>" +
+      siteMeta(site) + "</div>" +
+      '<div class="side">' + updatedBlock(site) + referButton(site) + "</div>" +
+      '<div class="bedwrap">' + bedTable(site) + bedNotes(site) + "</div>" +
       fitSection(site) +
       contactStrip(site) +
       "</article>";
@@ -364,10 +441,13 @@
         var cells = "", upd;
         if (site.noReport) {
           cells = '<td class="c" colspan="4"><span class="cell nr wide"><b>No report yet</b><small>call to check</small></span></td>';
-          upd = '<span class="fr stale">No report</span>';
+          upd = '<span class="upd-time stale">No report</span>';
         } else {
           var f = OB.when(site.report.receivedAt);
-          upd = '<span class="fr ' + f.level + '">' + esc(f.label) + "</span> " + sourceTag(site) + (site.reach.phone ? '<a class="grid-tel" href="' + tel(site.reach.phone) + '">' + esc(site.reach.phone) + "</a>" : "");
+          upd = '<span class="upd-time ' + f.level + '">' + esc(f.label) + '</span><span class="upd-src">' + esc(OB.sourceText(site.report, S)) + "</span>" +
+            '<button type="button" class="linkbtn" data-report="' + esc(site.report.id) + '" data-site="' + esc(site.id) + '">View source</button>' +
+            (site.referrals && site.referrals.length ? '<span class="upd-src">' + plural(site.referrals.length, "referral") + " since</span>" : "") +
+            (site.reach.phone ? '<a class="grid-tel" href="' + tel(site.reach.phone) + '">' + esc(site.reach.phone) + "</a>" : "");
           if (isNoCount(site)) {
             cells = '<td class="c" colspan="4"><span class="cell avail wide"><b>Beds available</b><small>type and count not given</small></span></td>';
           } else {
@@ -402,18 +482,23 @@
   function renderUpdates() {
     var reps = S.reports().filter(function (r) { return r.status === "published"; });
     var last24 = reps.filter(function (r) { return OB.when(r.receivedAt).hours < 24; });
-    var bySource = { email: 0, form: 0, admin: 0 };
+    var bySource = { email: 0, form: 0, admin: 0, referral: 0 };
     last24.forEach(function (r) { bySource[r.source]++; });
     var html = '<div class="cov">' +
-      '<div class="tile"><span class="n">' + last24.length + '</span><span class="l">Updates in the last 24 h</span><span class="s">' + bySource.email + " email · " + bySource.form + " form · " + bySource.admin + " DHS</span></div>" +
+      '<div class="tile"><span class="n">' + last24.length + '</span><span class="l">Updates in the last 24 h</span><span class="s">' + bySource.email + " email · " + bySource.form + " form · " + bySource.admin + " DHS · " + plural(bySource.referral, "referral") + "</span></div>" +
       '<div class="tile"><span class="n">' + S.boardSites().filter(function (s) { return !s.noReport && OB.when(s.report.receivedAt).hours < 24; }).length + " of " + S.sites.sites.length + '</span><span class="l">Sites current</span><span class="s">Updated in the last 24 h</span></div>' +
       "</div>";
     html += '<div class="cards">' + reps.slice(0, 40).map(function (r) {
       var f = OB.when(r.receivedAt);
-      var names = r.entries.filter(function (e) { return e.siteId; }).map(function (e) { return S.siteById[e.siteId] ? S.siteById[e.siteId].name : e.siteId; });
+      var names = r.source === "referral" ? [S.siteById[r.referral.siteId] ? S.siteById[r.referral.siteId].name : r.referral.siteId]
+        : r.entries.filter(function (e) { return e.siteId; }).map(function (e) { return S.siteById[e.siteId] ? S.siteById[e.siteId].name : e.siteId; });
       var org = r.orgId && S.orgById[r.orgId] ? S.orgById[r.orgId].short : "Unknown sender";
-      return '<article class="feed"><div class="feed-top"><b>' + esc(org) + "</b>" + OB.sourceChip(r.source) + '<span class="fr ' + f.level + '">' + esc(f.label) + "</span></div>" +
-        '<div class="feed-sites">' + esc(plural(names.length, "site")) + ": " + esc(names.join(", ")) + "</div>" +
+      var what = r.source === "referral"
+        ? "Referral marked" + (r.by && r.by.indexOf(": ") > -1 ? " by " + r.by.split(": ")[1] : "") + " — one " + (r.referral.type === "shared" ? "detox or rehab" : TYPE_LABEL[r.referral.type].toLowerCase()) + " bed at " + names[0]
+        : plural(names.length, "site") + ": " + names.join(", ");
+      return '<article class="feed"><div class="feed-top"><b>' + esc(r.source === "referral" ? "Pathways" : org) + '</b><span class="upd-src">' + OB.ICON[r.source] + " " + esc(OB.SOURCE[r.source].label) + '</span><span class="upd-time ' + f.level + '">' + esc(f.label) + "</span>" +
+        '<button type="button" class="linkbtn" data-report="' + esc(r.id) + '">View source</button></div>' +
+        '<div class="feed-sites">' + esc(what) + "</div>" +
         (r.source === "admin" && r.reason ? '<div class="feed-note">“' + esc(r.reason) + "”</div>" : "") +
         "</article>";
     }).join("") + "</div>";
@@ -446,12 +531,9 @@
   var PRECISION = { town: "Pin at the town centre, so distance is approximate.", area: "Rough area only." };
 
   function detail(site, a) {
-    if (site.noReport) return '<p class="fit-none">No report yet — call to check.</p>' + contactStrip(site);
-    var f = OB.when(site.report.receivedAt);
-    var head = a.state === "open" ? a.n + " " + countLabel(a) : a.state === "avail" ? "Available — no count given" : a.state === "full" ? "Full" : "Not reported for these filters";
-    return '<div class="ml-sum"><b>' + esc(head) + '</b><span class="fr ' + f.level + '" title="' + esc(f.age) + '">' + esc(f.label) + "</span>" + sourceTag(site) + "</div>" +
-      '<div class="split">' + splitPills(site, a) + "</div>" +
+    return siteMeta(site) + bedTable(site) + bedNotes(site) +
       (site.geo && PRECISION[site.geo.precision] ? '<p class="fit-note">' + PRECISION[site.geo.precision] + "</p>" : "") +
+      '<div class="ml-upd">' + updatedBlock(site) + referButton(site) + "</div>" +
       fitSection(site) + contactStrip(site);
   }
 
@@ -599,6 +681,65 @@
     if (b) select(b.getAttribute("data-sel"), true);
   });
 
+  // ---------- referrals ----------
+  // Marking a referral takes one bed off the site's count for everyone, until the provider reports again.
+  var SEXW = { male: "men", female: "women", any: "sex not given" };
+  function optLabel(o) {
+    return (o.type === "shared" ? "Detox or rehab (one count)" : TYPE_LABEL[o.type] + " — " + SEXW[o.sex]) + " · " + o.n + " open";
+  }
+  function lastInitials() { try { return localStorage.getItem("openbeds.initials") || ""; } catch (e) { return ""; } }
+  function saveInitials(v) { try { localStorage.setItem("openbeds.initials", v); } catch (e) { /* ignore */ } }
+  function openRefer(siteId) {
+    var site = S.boardSites().filter(function (x) { return x.id === siteId; })[0];
+    var opts = site ? referOptions(site) : [];
+    if (!opts.length) return;
+    // Preselect the bed that matches the current filters, if there is one.
+    var pick = 0;
+    for (var i = 0; i < opts.length; i++) {
+      var o = opts[i];
+      var typeOk = state.type === "any" || o.type === state.type || (o.type === "shared" && site.shared.types.indexOf(state.type) > -1);
+      var sexOk = state.sex === "any" || o.sex === state.sex;
+      if (typeOk && sexOk) { pick = i; break; }
+    }
+    var html = '<form id="refer-form" novalidate><div class="srcdlg-h"><h2 id="refer-h">Mark a referral to ' + esc(site.name) + "</h2></div>" +
+      '<p class="hint">This takes one bed off ' + esc(site.name) + "’s count for everyone using the board, until the provider sends a new count. Don’t enter client names or details.</p>" +
+      '<fieldset class="refer-opts"><legend class="lbl">Which bed?</legend>' + opts.map(function (o, j) {
+        return '<label class="refer-opt"><input type="radio" name="refer-bed" value="' + j + '"' + (j === pick ? " checked" : "") + "> " + esc(optLabel(o)) + "</label>";
+      }).join("") + "</fieldset>" +
+      '<div class="field"><label class="lbl" for="refer-by">Your initials <span class="help">(optional)</span></label><input id="refer-by" class="input" maxlength="6" autocomplete="off" value="' + esc(lastInitials()) + '"></div>' +
+      '<div class="btnrow"><button type="submit" class="btn primary">Mark referral</button><button type="button" class="btn" data-close>Cancel</button></div></form>';
+    var el = OB.openDialog(html, "refer-h");
+    el.querySelector("#refer-form").addEventListener("submit", function (e) {
+      e.preventDefault();
+      var o = opts[+el.querySelector('input[name="refer-bed"]:checked').value];
+      var by = el.querySelector("#refer-by").value.trim();
+      saveInitials(by);
+      var r = S.refer({ siteId: site.id, type: o.type, sex: o.sex, by: by });
+      OB.closeDialog();
+      var b = document.querySelector('[data-refer="' + site.id + '"]');
+      if (b) b.focus();
+      toast("Referral marked: " + site.name + ", " + optLabel(o).split(" · ")[0].toLowerCase() + " now " + (o.n - 1) + " open.", r.id);
+    });
+  }
+  var toastTimer = null;
+  function toast(msg, undoId) {
+    var t = $("toast");
+    if (!t) { t = document.createElement("div"); t.id = "toast"; t.className = "toast"; t.setAttribute("role", "status"); document.body.appendChild(t); }
+    t.innerHTML = "<span>" + esc(msg) + "</span>" + (undoId ? '<button type="button" class="btn small" data-undo="' + esc(undoId) + '">Undo</button>' : "");
+    t.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { t.hidden = true; }, 12000);
+  }
+  document.addEventListener("click", function (e) {
+    var rb = e.target.closest("[data-refer]");
+    if (rb) { openRefer(rb.getAttribute("data-refer")); return; }
+    var ub = e.target.closest("[data-undo]");
+    if (ub) {
+      S.undoReferral(ub.getAttribute("data-undo"), { by: "Pathways" + (lastInitials() ? ": " + lastInitials() : "") });
+      toast("Referral undone. The bed is back on the board.");
+    }
+  });
+
   // ---------- tabs ----------
   var TABS = [["find", "tab-find", "view-find"], ["grid", "tab-grid", "view-grid"], ["updates", "tab-updates", "view-updates"]];
   function setupTabs() {
@@ -652,7 +793,7 @@
   $("f-pay").innerHTML += S.sites.payTypes.map(function (p) { return '<option value="' + p[0] + '">' + esc(p[1]) + "</option>"; }).join("");
   $("f-pay").addEventListener("change", function (e) { state.pay = e.target.value; render(); });
   $("f-search").addEventListener("input", function (e) { state.q = e.target.value.trim().toLowerCase(); render(); });
-  $("f-mh").addEventListener("change", function (e) { state.mh = e.target.checked; render(); });
+  $("f-sud").addEventListener("change", function (e) { state.sudOnly = e.target.checked; render(); });
   $("f-fresh").addEventListener("change", function (e) { state.recentOnly = e.target.checked; render(); });
   $("f-sort").addEventListener("change", function (e) { state.sort = e.target.value; render(); });
   setupTabs();
