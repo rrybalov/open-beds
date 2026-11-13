@@ -275,3 +275,25 @@ details.sim { padding: 16px 18px; }
 .board-card .panel + .panel { margin-top: 14px; }
 .admin-card > .hint { margin: 0; }
 @media (max-width: 760px) { .seg { border-radius: 20px; } }
+
+/* ===== WCAG 2.2 AA fixes ===== */
+/* 1.4.3: zero / N/A / not-given cells and highlighted headers reach 4.5:1 on every surface */
+.beds td.zero, .beds td.nr, .beds td.ns, .beds td.na, .beds td[colspan]:not(.yes) { color: #5C6075; }
+.beds .hc, .beds tr.hit .hc { background: var(--smoke); }
+.beds tr.hit th, .beds tr.hit td { background: #F0F0FC; }
+/* 1.4.1: the filtered column is marked by more than color */
+.beds thead th.hc { color: var(--dark-blue); text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 4px; }
+/* 2.5.8: targets at least 24×24 */
+.grid-tel { display: inline-flex; align-items: center; min-height: 24px; }
+details.sim > summary { min-height: 44px; display: flex; align-items: center; }
+.linkbtn { display: inline-flex; align-items: center; min-height: 24px; }
+/* Toast: text controls, dismissible (2.4.11) */
+.toast { gap: 12px; }
+.toast .toast-undo { color: var(--sky); text-decoration: underline; font-size: 13px; }
+.toast .toast-undo:hover { color: var(--white); }
+.toast-x { display: grid; place-items: center; width: 32px; height: 32px; margin: -4px -6px -4px 0; border: 0; border-radius: var(--radius); background: transparent; color: var(--white); cursor: pointer; }
+.toast-x:hover { background: rgba(255, 255, 255, .12); }
+.toast :focus-visible { outline-color: var(--sky); }
+/* Links inside running text are underlined (1.4.1) */
+p a:not(.btn):not(.cbtn), li a:not(.btn):not(.cbtn), .hint a { text-decoration: underline; }
+.beds .sub { color: #5C6075; }

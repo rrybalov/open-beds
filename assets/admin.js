@@ -159,11 +159,12 @@
   }
   function siteItem(it) {
     var r = it.r, f = OB.when(r.receivedAt), site = it.siteId ? S.siteById[it.siteId] : null, st = statusText(r);
-    var acts = ['<button type="button" class="linkbtn" data-report="' + esc(r.id) + '"' + (it.siteId ? ' data-site="' + esc(it.siteId) + '"' : "") + ' aria-haspopup="dialog">' + (r.source === "email" ? "View email" : "View details") + "</button>"];
+    var forSite = site ? '<span class="sr"> — ' + esc(site.name) + ", " + esc(f.label) + "</span>" : "";
+    var acts = ['<button type="button" class="linkbtn" data-report="' + esc(r.id) + '"' + (it.siteId ? ' data-site="' + esc(it.siteId) + '"' : "") + ' aria-haspopup="dialog">' + (r.source === "email" ? "View email" : "View details") + forSite + "</button>"];
     if (r.status === "published") {
-      if (it.kind === "referral") acts.push('<button type="button" class="linkbtn" data-act="undo" data-id="' + r.id + '">Undo</button>');
-      else if (it.kind === "profile") acts.push('<button type="button" class="linkbtn danger" data-act="reject" data-id="' + r.id + '">Revert</button>');
-      if (site && !site.pending) acts.push('<button type="button" class="linkbtn" data-fix="' + esc(site.id) + '">Correct counts</button>');
+      if (it.kind === "referral") acts.push('<button type="button" class="linkbtn" data-act="undo" data-id="' + r.id + '">Undo' + forSite + "</button>");
+      else if (it.kind === "profile") acts.push('<button type="button" class="linkbtn danger" data-act="reject" data-id="' + r.id + '">Revert' + forSite + "</button>");
+      if (site && !site.pending) acts.push('<button type="button" class="linkbtn" data-fix="' + esc(site.id) + '">Correct counts<span class="sr"> for ' + esc(site.name) + "</span></button>");
     }
     return '<article class="ui-item site-line' + (st ? " off" : "") + '">' +
       '<div class="ui-main"><p class="ui-top"><b>' + esc(site ? site.name : "Unmatched counts") + "</b>" +
@@ -245,12 +246,18 @@
     lastFocus = document.activeElement;
     $("dlg").innerHTML = html;
     $("dlg-wrap").hidden = false;
+    OB.setBehindInert(true);
+    // Don't make DHS staff retype their name in every dialog (WCAG 3.3.7).
+    Array.prototype.forEach.call($("dlg").querySelectorAll("#ad-by, #ap-by, #nf-by"), function (el) {
+      if (!el.value) el.value = OB.remembered("adminName");
+      el.addEventListener("change", function () { OB.remember("adminName", el.value.trim()); });
+    });
     var first = $("dlg").querySelector("input, select, textarea, button");
     if (first) first.focus();
     $("dlg").querySelector("[data-cancel]").addEventListener("click", closeDialog);
     $("dlg").querySelector("form").addEventListener("submit", function (e) { e.preventDefault(); onSave(); });
   }
-  function closeDialog() { $("dlg-wrap").hidden = true; $("dlg").innerHTML = ""; if (lastFocus) lastFocus.focus(); }
+  function closeDialog() { $("dlg-wrap").hidden = true; $("dlg").innerHTML = ""; OB.setBehindInert(false); if (lastFocus && lastFocus.isConnected) lastFocus.focus(); }
   document.addEventListener("keydown", function (e) { if (e.key === "Escape" && !$("dlg-wrap").hidden) closeDialog(); });
 
   function openSiteUpdate(siteId) {
@@ -329,7 +336,7 @@
   function openProfile(siteId) {
     var site = S.siteById[siteId];
     var html = '<form novalidate><h2 id="dlg-h">' + esc(site.name) + ' — facility details</h2><p class="hint">Levels of care, who they take, payment and contact. Saved changes show on the board and in Updates.</p>' +
-      PR.fields(site, "ap", { open: true }) +
+      PR.fields(site, "ap", { open: true, h: 3 }) +
       '<div class="row2"><div class="field"><label class="lbl" for="ap-by">Your name</label><input id="ap-by" class="input wide" type="text" autocomplete="name"></div>' +
       '<div class="field"><label class="lbl" for="ap-reason">Why <span class="help">(optional)</span></label><input id="ap-reason" class="input wide" type="text" placeholder="e.g. Confirmed with admissions"></div></div>' +
       '<div class="btnrow"><button type="submit" class="btn primary">Save details</button><button type="button" class="btn" data-cancel>Cancel</button></div></form>';
@@ -368,7 +375,8 @@
   var TABS = [["updates", "t-updates", "p-updates"], ["settings", "t-settings", "p-settings"]];
   function say(msg) { $("a-status").textContent = msg; }
 
-  function renderAll() {
+  function renderAll() { OB.keepFocus(renderAllNow); }
+  function renderAllNow() {
     var review = S.reports().filter(function (r) { return r.status === "review"; }).length;
     var cur = S.current(), live = liveSites();
     var fresh = live.filter(function (s) { return cur[s.id] && OB.when(cur[s.id].report.receivedAt).hours < 24; }).length;

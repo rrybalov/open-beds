@@ -321,12 +321,13 @@
   function contactStrip(site) {
     var r = site.reach || {}, m = mailto(site), em = intakeEmail(site), bits = [];
     if (r.phone) bits.push('<a class="cbtn primary" href="' + tel(r.phone) + '" aria-label="Call ' + esc(site.name) + " admissions, " + esc(r.phone) + '">' + PHONE_SVG + esc(r.phone) + "</a>");
-    if (m) bits.push('<a class="cbtn" href="' + esc(m) + '">' + MAIL_SVG + "Email intake</a>");
+    var forSite = '<span class="sr"> for ' + esc(site.name) + "</span>";
+    if (m) bits.push('<a class="cbtn" href="' + esc(m) + '">' + MAIL_SVG + "Email intake" + forSite + "</a>");
     if (site.geo) {
       var dest = site.geo.precision === "address" ? site.geo.lat + "," + site.geo.lng : (site.fullName || site.name) + ", " + site.town + ", PA";
-      bits.push('<a class="cbtn" href="https://www.google.com/maps/dir/?api=1' + (state.origin ? "&amp;origin=" + state.origin.lat + "," + state.origin.lng : "") + "&amp;destination=" + esc(encodeURIComponent(dest)) + '" target="_blank" rel="noopener">Directions</a>');
+      bits.push('<a class="cbtn" href="https://www.google.com/maps/dir/?api=1' + (state.origin ? "&amp;origin=" + state.origin.lat + "," + state.origin.lng : "") + "&amp;destination=" + esc(encodeURIComponent(dest)) + '" target="_blank" rel="noopener">Directions' + forSite + '<span class="sr"> (opens in a new tab)</span></a>');
     }
-    if (r.web) bits.push('<a class="cbtn" href="' + esc(r.web) + '" target="_blank" rel="noopener">' + WEB_SVG + "Website</a>");
+    if (r.web) bits.push('<a class="cbtn" href="' + esc(r.web) + '" target="_blank" rel="noopener">' + WEB_SVG + "Website" + forSite + '<span class="sr"> (opens in a new tab)</span></a>');
     var notes = [];
     if (r.phone && r.phoneFrom) notes.push("Phone: " + r.phoneFrom + ".");
     if (em) notes.push(em.how + ".");
@@ -340,8 +341,8 @@
     if (a.state === "open") box = '<div class="count open"><b>' + a.n + "</b><span>" + esc(countLabel(a)) + "</span></div>";
     else if (a.state === "avail") box = '<div class="count avail"><b>Yes</b><span>available, no count</span></div>';
     else box = '<div class="count full"><b>0</b><span>' + (state.type === "any" ? "open beds" : esc(countLabel(a))) + "</span></div>";
-    return '<article class="card" id="card-' + esc(site.id) + '">' + box +
-      '<div class="site"><h3>' + esc(site.name) + (site.fullName && site.fullName !== site.name ? ' <span class="full-name">' + esc(site.fullName) + "</span>" : "") + "</h3>" +
+    return '<article class="card" id="card-' + esc(site.id) + '" aria-labelledby="h-' + esc(site.id) + '">' + box +
+      '<div class="site"><h3 id="h-' + esc(site.id) + '">' + esc(site.name) + (site.fullName && site.fullName !== site.name ? ' <span class="full-name">' + esc(site.fullName) + "</span>" : "") + "</h3>" +
       '<div class="where">' + esc(site.org) + " · " + esc(site.town) + " · " + esc(regionLabel(site)) + (state.origin ? " · " + esc(distLabel(site)) : "") + "</div>" +
       siteMeta(site) + "</div>" +
       '<div class="side">' + updatedBlock(site) + referButton(site) + "</div>" +
@@ -720,11 +721,21 @@
   function toast(msg, undoId) {
     var t = $("toast");
     if (!t) { t = document.createElement("div"); t.id = "toast"; t.className = "toast"; t.setAttribute("role", "status"); document.body.appendChild(t); }
-    t.innerHTML = "<span>" + esc(msg) + "</span>" + (undoId ? '<button type="button" class="btn small" data-undo="' + esc(undoId) + '">Undo</button>' : "");
+    t.innerHTML = "<span>" + esc(msg) + "</span>" + (undoId ? '<button type="button" class="linkbtn toast-undo" data-undo="' + esc(undoId) + '">Undo</button>' : "") +
+      '<button type="button" class="toast-x" aria-label="Dismiss message">' + '<svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>';
     t.hidden = false;
+    // Focused controls scroll clear of the toast while it shows (WCAG 2.4.11).
+    document.documentElement.style.scrollPaddingBottom = "96px";
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(function () { t.hidden = true; }, 12000);
+    toastTimer = setTimeout(hideToast, 12000);
   }
+  function hideToast() {
+    var t = $("toast");
+    if (t) t.hidden = true;
+    document.documentElement.style.scrollPaddingBottom = "";
+  }
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape" && $("toast") && !$("toast").hidden && !document.querySelector(".dialog-wrap:not([hidden])")) hideToast(); });
+  document.addEventListener("click", function (e) { if (e.target.closest(".toast-x")) hideToast(); });
   document.addEventListener("click", function (e) {
     var rb = e.target.closest("[data-refer]");
     if (rb) { openRefer(rb.getAttribute("data-refer")); return; }
@@ -750,7 +761,8 @@
     });
   }
 
-  function render() {
+  function render() { OB.keepFocus(renderNow); }
+  function renderNow() {
     var all = S.boardSites();
     var sites = all.filter(passesFilters);
     var latest = all.filter(function (s) { return !s.noReport; }).map(function (s) { return new Date(s.report.receivedAt); }).sort(function (a, b) { return b - a; })[0];

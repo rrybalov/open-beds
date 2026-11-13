@@ -79,6 +79,29 @@
     }).join("\n");
   }
 
+  // Keep keyboard focus on the same control when a page re-renders (WCAG 2.4.3 / 3.2.1).
+  var FOCUS_ATTRS = ["data-refer", "data-report", "data-site", "data-undo", "data-sel", "data-pin", "data-act", "data-id", "data-fix", "data-type", "data-loc", "data-org", "data-copy", "data-expand", "data-remove", "data-profile"];
+  function focusKey(el) {
+    if (!el || el === document.body || el === document.documentElement) return null;
+    if (el.id) return "#" + CSS.escape(el.id);
+    var base = el.tagName.toLowerCase(), sel = base;
+    FOCUS_ATTRS.forEach(function (a) { if (el.hasAttribute(a)) sel += "[" + a + '="' + CSS.escape(el.getAttribute(a)) + '"]'; });
+    return sel === base ? null : sel;
+  }
+  function keepFocus(fn) {
+    var key = focusKey(document.activeElement);
+    fn();
+    if (!key) return;
+    var n = document.querySelector(key);
+    if (n && n !== document.activeElement) n.focus({ preventScroll: true });
+  }
+  // While a modal is open, everything behind it is inert, so Tab stays inside (WCAG 2.4.3).
+  function setBehindInert(on) {
+    Array.prototype.forEach.call(document.querySelectorAll(".hub, .skip"), function (el) { el.inert = !!on; });
+  }
+  function remembered(key) { try { return localStorage.getItem("openbeds." + key) || ""; } catch (e) { return ""; } }
+  function remember(key, v) { try { localStorage.setItem("openbeds." + key, v); } catch (e) { /* ignore */ } }
+
   var dlg = null, returnFocus = null;
   // Shared modal for pages without their own (board): OB.openDialog(html) / OB.closeDialog().
   function openDialog(html, label) {
@@ -87,6 +110,7 @@
     dlg.firstChild.setAttribute("aria-labelledby", label || "srcdlg-h");
     dlg.firstChild.innerHTML = html;
     dlg.hidden = false;
+    setBehindInert(true);
     var first = dlg.firstChild.querySelector("input:checked, input, select, button");
     if (first) first.focus();
     return dlg.firstChild;
@@ -103,7 +127,7 @@
     dlg = wrap;
     return dlg;
   }
-  function closeSource() { dlg.hidden = true; dlg.firstChild.innerHTML = ""; if (returnFocus && returnFocus.isConnected) returnFocus.focus(); }
+  function closeSource() { dlg.hidden = true; dlg.firstChild.innerHTML = ""; setBehindInert(false); if (returnFocus && returnFocus.isConnected) returnFocus.focus(); }
 
   function openSource(report, siteId, S) {
     var site = siteId ? S.siteById[siteId] : null;
@@ -148,6 +172,22 @@
     dlg.querySelector("[data-close]").focus();
   }
 
+  // Tab and Shift+Tab cycle inside an open modal dialog (WCAG 2.4.3).
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "Tab") return;
+    var wrap = document.querySelector(".dialog-wrap:not([hidden])");
+    if (!wrap) return;
+    var box = wrap.querySelector(".dialog");
+    var items = Array.prototype.filter.call(box.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]):not([type=hidden]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])'), function (el) {
+      return el.getClientRects().length && getComputedStyle(el).visibility !== "hidden" && !(el.type === "radio" && !el.checked && box.querySelector('input[type=radio][name="' + el.name + '"]:checked'));
+    });
+    if (!items.length) return;
+    var first = items[0], last = items[items.length - 1], cur = document.activeElement;
+    if (!box.contains(cur)) { e.preventDefault(); first.focus(); return; }
+    if (e.shiftKey && (cur === first || cur === box)) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && cur === last) { e.preventDefault(); first.focus(); }
+  });
+
   // Any [data-report] button on any page opens its source.
   document.addEventListener("click", function (e) {
     var b = e.target.closest && e.target.closest("[data-report]");
@@ -177,5 +217,5 @@
     return parts.join("; ") || "No counts";
   }
 
-  root.OB = { esc: esc, when: when, timeOf: timeOf, sourceChip: sourceChip, sourceLink: sourceLink, sourceText: sourceText, openDialog: openDialog, closeDialog: function () { if (dlg) closeSource(); }, SOURCE: SOURCE, ICON: ICON, plural: plural, TYPE_LABEL: TYPE_LABEL, SEX_LABEL: SEX_LABEL, entrySummary: entrySummary, TZ: TZ };
+  root.OB = { esc: esc, when: when, timeOf: timeOf, sourceChip: sourceChip, sourceLink: sourceLink, sourceText: sourceText, openDialog: openDialog, keepFocus: keepFocus, setBehindInert: setBehindInert, remembered: remembered, remember: remember, closeDialog: function () { if (dlg) closeSource(); }, SOURCE: SOURCE, ICON: ICON, plural: plural, TYPE_LABEL: TYPE_LABEL, SEX_LABEL: SEX_LABEL, entrySummary: entrySummary, TZ: TZ };
 })(window);

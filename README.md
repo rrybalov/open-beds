@@ -33,6 +33,7 @@ No build step. Serve the folder (`python3 -m http.server`) or open `index.html`.
 | `assets/board.js` · `update.js` · `admin.js` | The three pages |
 | `assets/colab.css` | CoLab / ClientView look and feel: sidebar shell, cards, tabs, segmented controls, buttons, modal, toast — matches `rrybalov/colab-client-profile` |
 | `assets/editor.js` · `facility.js` · `profile.js` · `common.js` | Shared bed-count editor, new-facility form, facility-details form, helpers |
+| `tests/a11y.js` | WCAG 2.2 AA audit across every page state (serve on :8765, then `node tests/a11y.js`). Report: `docs/accessibility-audit.md` |
 | `tests/parser.test.js` | `node tests/parser.test.js` — parser checked against all 7 emails |
 | `docs/architecture.md` | Sources, email alias options, API, security |
 | `docs/email-aggregation.md` | The 7 emails side by side, with totals |

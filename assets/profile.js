@@ -34,6 +34,7 @@
 
   function fields(site, p, opts) {
     opts = opts || {};
+    var h = "h" + (opts.h || 4);
     var f = site.fit || {}, r = site.reach || {}, pol = f.policies || {}, pay = f.pay || {};
     var lv = S.sites.levels.map(function (l) {
       return '<label class="check"><input type="checkbox" name="' + p + '-lv" value="' + esc(l[0]) + '"' + ((f.levels || []).indexOf(l[0]) > -1 ? " checked" : "") + "> " + esc(l[1]) + ' <span class="help">' + esc(l[2]) + "</span></label>";
@@ -46,20 +47,20 @@
     return '<details class="profile-edit"' + (opts.open ? " open" : "") + ' data-profile="' + esc(site.id) + '">' +
       "<summary>Facility details <span class=\"help\">— levels of care, who you take, payment, contact</span></summary>" +
       '<p class="hint">Pathways uses these to decide who to send you. Changes show on the bed board when you submit.</p>' +
-      '<h4 class="form-sub">Levels of care</h4>' +
+      '<' + h + ' class="form-sub">Levels of care</' + h + '>' +
       '<fieldset class="lv-grid"><legend class="sr">LOCA levels accepted at ' + esc(site.name) + "</legend>" + lv + "</fieldset>" +
       text(p + "-lvnote", "Anything to add about levels?", "(optional)", f.levelsNote, "text", "e.g. 3.7 only for men") +
-      '<h4 class="form-sub">Who you take</h4>' +
+      '<' + h + ' class="form-sub">Who you take</' + h + '>' +
       '<div class="row2">' + text(p + "-serves", "Who you serve", "", f.serves, "text", "e.g. Adult men 18+") +
       area(p + "-takes", "Also takes or specializes in", "(one per line)", (f.takes || []).join("\n"), "e.g. Co-occurring mental health") + "</div>" +
       '<div class="row2">' + area(p + "-excl", "Won’t take", "(one per line)", (f.excludes || []).join("\n"), "e.g. Active suicidal ideation") +
       area(p + "-req", "Needed before admission", "(one per line)", (f.requires || []).join("\n"), "e.g. Negative TB test") + "</div>" +
-      '<h4 class="form-sub">Specific situations</h4><p class="help" style="margin:-4px 0 8px">Intake asks about these on most calls. Leave blank if it depends — staff will ask.</p>' +
+      '<' + h + ' class="form-sub">Specific situations</' + h + '><p class="help" style="margin:-4px 0 8px">Intake asks about these on most calls. Leave blank if it depends — staff will ask.</p>' +
       '<div class="row2">' + TOPICS.map(function (t) { return text(p + "-pol-" + t[0], t[1], "", pol[t[0]], "text", t[2]); }).join("") + "</div>" +
-      '<h4 class="form-sub">Payment</h4><div class="pay-grid">' + payRows + "</div>" +
+      '<' + h + ' class="form-sub">Payment</' + h + '><div class="pay-grid">' + payRows + "</div>" +
       text(p + "-payer", "Payment notes", "(optional)", f.payer, "text", "e.g. Pre-certification handled by us") +
       area(p + "-notes", "Admissions notes", "(one per line)", (f.notes || []).join("\n"), "e.g. Admissions until 9 PM; call ahead after 5") +
-      '<h4 class="form-sub">Admissions contact</h4>' +
+      '<' + h + ' class="form-sub">Admissions contact</' + h + '>' +
       '<div class="row3">' + text(p + "-phone", "Phone", "", r.phone, "tel") + text(p + "-email", "Intake email", "", r.email, "email") + text(p + "-web", "Website", "", r.web, "url", "https://") + "</div>" +
       '<div class="err" id="' + p + '-perr" role="alert" hidden></div></details>';
   }

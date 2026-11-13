@@ -147,6 +147,8 @@
 
   renderOrgs();
   renderSites();
+  if (!$("who").value) $("who").value = OB.remembered("providerRole");
+  $("who").addEventListener("change", function () { OB.remember("providerRole", $("who").value.trim()); });
   $("org").addEventListener("change", renderSites);
   $("upd").addEventListener("submit", submit);
   $("add-fac").addEventListener("click", addFacility);
