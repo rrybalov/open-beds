@@ -72,7 +72,7 @@
       '<fieldset class="lv-grid"><legend class="lbl">LOCA levels accepted</legend>' + levels + "</fieldset>" +
       '<div class="row2">' + field(p + "-excl", "Won’t take", { help: "optional, one per line", textarea: true }) + field(p + "-pay", "Payment accepted", { help: "optional", placeholder: "e.g. Medical Assistance and SCA" }) + "</div>" +
       '<h3 class="form-sub">Open beds now</h3><p class="hint">Every bed type is here. Enter a number, <b>0</b> if full, <b>NA</b> if not offered, or leave blank.</p>' +
-      '<div class="nf-beds">' + ED.siteBlock(temp(p), null, { prefix: p, mode: "admin" }) + "</div>" +
+      '<div class="nf-beds">' + ED.siteBlock(temp(p), null, { prefix: p, mode: "admin", expandable: false }) + "</div>" +
       '<div class="err" id="' + p + '-ferr" role="alert" hidden></div></div>';
   }
 

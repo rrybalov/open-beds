@@ -539,3 +539,10 @@ details.sim[open] summary::after { content: " ▾"; }
 .ui-status { background: none !important; padding: 0 !important; border: 0 !important; }
 .linkbtn.danger { color: #9B2C1F; }
 .ui-act { gap: 8px 14px; }
+
+/* Update form: header CTA, grow a site's bed types */
+.page-h.with-cta { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 12px 24px; }
+.page-h.with-cta > div { flex: 1 1 420px; }
+.page-h.with-cta .btn { margin-top: 8px; }
+.site-edit-acts { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 16px; margin-top: 10px; }
+.grow-btn { font-size: 14px; font-weight: 500; }

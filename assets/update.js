@@ -35,8 +35,7 @@
     var sites = orgSites(orgId);
     $("sites").innerHTML = sites.map(function (s) {
       var c = cur[s.id];
-      return ED.siteBlock(s, c, { prefix: PREFIX, mode: "provider" }).replace("</section>",
-        (c ? '<div class="btnrow"><button type="button" class="btn small" data-copy="' + s.id + '">Same as last update</button></div>' : "") + "</section>");
+      return ED.siteBlock(s, c, { prefix: PREFIX, mode: "provider" });
     }).join("");
     $("tmpl").textContent = template(sites);
   }
@@ -141,6 +140,14 @@
   $("org").addEventListener("change", renderSites);
   $("upd").addEventListener("submit", submit);
   $("add-fac").addEventListener("click", addFacility);
+  // Top-right button: add a facility for the chosen provider, or start a new provider.
+  $("cta-add").addEventListener("click", function () {
+    var orgId = $("org").value;
+    if (orgId && orgId !== NEW) { addFacility(); $("w-" + facs[facs.length - 1]).scrollIntoView({ block: "start", behavior: "smooth" }); return; }
+    if (orgId !== NEW) { $("org").value = NEW; renderSites(); }
+    $("neworg").scrollIntoView({ block: "start", behavior: "smooth" });
+    $("np-orgname").focus({ preventScroll: true });
+  });
   $("upd").addEventListener("click", function (e) {
     var c = e.target.closest("[data-copy]"); if (c) copyLast(c.getAttribute("data-copy"));
     var r = e.target.closest("[data-remove]"); if (r) removeFacility(r.getAttribute("data-remove"));

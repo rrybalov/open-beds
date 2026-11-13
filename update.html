@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Crect width=%2716%27 height=%2716%27 rx=%273%27 fill=%27%23262673%27/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="assets/styles.css?v=202611132051">
+  <link rel="stylesheet" href="assets/styles.css?v=202611132057">
 </head>
 <body>
   <a class="skip" href="#form-main">Skip to form</a>
@@ -29,9 +29,12 @@
   <div class="demo-bar" role="note"><div class="wrap"><b>Prototype — don’t enter real availability.</b> Submissions are saved only in this browser and are not sent to Pathways.</div></div>
 
   <main class="wrap" id="form-main" tabindex="-1">
-    <section class="page-h">
-      <h1>Update your open beds</h1>
-      <p>Takes about a minute. Your counts show on Pathways’ bed board as soon as you submit, so intake staff can call you first.</p>
+    <section class="page-h with-cta">
+      <div>
+        <h1>Update your open beds</h1>
+        <p>Takes about a minute. Your counts show on Pathways’ bed board as soon as you submit, so intake staff can call you first.</p>
+      </div>
+      <button type="button" class="btn primary" id="cta-add">Add a provider or facility</button>
     </section>
 
     <div id="done" class="success" hidden tabindex="-1"></div>
@@ -46,6 +49,7 @@
         <p class="hint" id="org-hint" style="margin:10px 0 0">Not listed? Choose “My organization isn’t listed” at the bottom of the list.</p>
         <div id="neworg" hidden>
           <h2 style="margin-top:16px">Your organization</h2>
+          <p class="hint">Already listed and adding a location? Choose your organization above instead, then “Add a facility.”</p>
           <div class="row2">
             <div class="field"><label class="lbl" for="np-orgname">Organization name <span class="help">(required)</span></label><input id="np-orgname" class="input wide" type="text" autocomplete="organization"></div>
             <div class="field"><label class="lbl" for="np-domain">Email domain you send from <span class="help">(optional, e.g. provider.org)</span></label><input id="np-domain" class="input wide" type="text" autocomplete="off"></div>
@@ -55,7 +59,7 @@
 
       <div class="panel" id="beds-panel" hidden>
         <h2>Open beds right now</h2>
-        <p class="hint">Enter a number for each bed you offer — <b>0</b> if full, <b>NA</b> if you don’t offer it. Grey numbers are your last update. Leave a whole site blank to skip it.</p>
+        <p class="hint">Enter a number for each bed you offer — <b>0</b> if full, <b>NA</b> if you don’t offer it. Grey numbers are your last update. Leave a whole site blank to skip it. Offer a bed type that isn’t shown, or can split men and women? Use “Add a bed type” under that site.</p>
         <div id="sites"></div>
       </div>
 
@@ -89,13 +93,13 @@
     </div>
   </main>
 
-  <script src="data/sites.js?v=202611132051"></script>
-  <script src="data/sample-emails.js?v=202611132051"></script>
-  <script src="assets/parser.js?v=202611132051"></script>
-  <script src="assets/store.js?v=202611132051"></script>
-  <script src="assets/common.js?v=202611132051"></script>
-  <script src="assets/editor.js?v=202611132051"></script>
-  <script src="assets/facility.js?v=202611132051"></script>
-  <script src="assets/update.js?v=202611132051"></script>
+  <script src="data/sites.js?v=202611132057"></script>
+  <script src="data/sample-emails.js?v=202611132057"></script>
+  <script src="assets/parser.js?v=202611132057"></script>
+  <script src="assets/store.js?v=202611132057"></script>
+  <script src="assets/common.js?v=202611132057"></script>
+  <script src="assets/editor.js?v=202611132057"></script>
+  <script src="assets/facility.js?v=202611132057"></script>
+  <script src="assets/update.js?v=202611132057"></script>
 </body>
 </html>

@@ -62,6 +62,34 @@
       return { version: 2, seededAt: new Date(now).toISOString(), touched: false, settings: { autoPublish: true }, reports: reports };
     }
 
+    // Bed layouts providers have grown (a new bed type, or a men/women split) since data/sites.js.
+    var baseBeds = {};
+    SITES.sites.forEach(function (p) { baseBeds[p.id] = JSON.parse(JSON.stringify(p.beds || [])); });
+    function growLayout(st, entry) {
+      var site = siteById[entry.siteId];
+      if (!site) return;
+      var beds = JSON.parse(JSON.stringify((st.layouts || {})[site.id] || site.beds || []));
+      var changed = false;
+      function row(t) { return beds.filter(function (b) { return b.type === t; })[0]; }
+      Object.keys(entry.counts || {}).forEach(function (t) {
+        if (t === "outpatient") { if (!row("outpatient")) { beds.push({ type: "outpatient", mode: "yesno" }); changed = true; } return; }
+        Object.keys(entry.counts[t]).forEach(function (sx) {
+          var b = row(t);
+          if (!b) { beds.push({ type: t, sexes: [sx] }); changed = true; return; }
+          if (b.sexes && b.sexes.indexOf(sx) < 0) { b.sexes.push(sx); changed = true; }
+        });
+      });
+      (entry.qualitative || []).forEach(function (q) {
+        if (q.types.indexOf("outpatient") > -1 && !row("outpatient")) { beds.push({ type: "outpatient", mode: "yesno" }); changed = true; }
+      });
+      if (!changed) return;
+      var order = ["detox", "shared", "residential", "php", "outpatient"];
+      beds.sort(function (a, b) { return order.indexOf(a.type) - order.indexOf(b.type); });
+      beds.forEach(function (b) { if (b.sexes) b.sexes.sort(function (x, y) { return ["male", "female", "any"].indexOf(x) - ["male", "female", "any"].indexOf(y); }); });
+      st.layouts = st.layouts || {};
+      st.layouts[site.id] = beds;
+    }
+
     // Merge facilities added on the admin page into the shared site list.
     function hydrate(s) {
       (s.customOrgs || []).forEach(function (o) { if (!orgById[o.id]) { SITES.orgs.push(o); orgById[o.id] = o; } });
@@ -69,8 +97,10 @@
         if (!siteById[p.id]) { SITES.sites.push(p); siteById[p.id] = p; }
         else siteById[p.id].pending = p.pending; // approval may have happened in another tab
       });
+      Object.keys(s.layouts || {}).forEach(function (id) { if (siteById[id]) siteById[id].beds = s.layouts[id]; });
     }
     function dropCustom() {
+      SITES.sites.forEach(function (p) { if (baseBeds[p.id]) p.beds = JSON.parse(JSON.stringify(baseBeds[p.id])); });
       for (var i = SITES.sites.length - 1; i >= 0; i--) if (SITES.sites[i].custom) { delete siteById[SITES.sites[i].id]; SITES.sites.splice(i, 1); }
       for (var j = SITES.orgs.length - 1; j >= 0; j--) if (SITES.orgs[j].custom) { delete orgById[SITES.orgs[j].id]; SITES.orgs.splice(j, 1); }
     }
@@ -162,13 +192,13 @@
 
     function submitForm(input) {
       var r = { id: uid(), source: "form", status: "published", receivedAt: nowIso(), orgId: input.orgId, by: input.by || "Provider form", entries: input.entries, note: input.note };
-      mutate(function (st) { st.reports.push(r); });
+      mutate(function (st) { st.reports.push(r); input.entries.forEach(function (e) { growLayout(st, e); }); hydrate(st); });
       return r;
     }
 
     function adminUpdate(input) {
       var r = { id: uid(), source: "admin", status: "published", receivedAt: nowIso(), orgId: input.orgId, by: "DHS admin" + (input.by ? ": " + input.by : ""), reason: input.reason, entries: input.entries };
-      mutate(function (st) { st.reports.push(r); });
+      mutate(function (st) { st.reports.push(r); input.entries.forEach(function (e) { growLayout(st, e); }); hydrate(st); });
       return r;
     }
 
