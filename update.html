@@ -43,12 +43,27 @@
           <select id="org" class="sel-in" style="max-width:420px"></select>
           <span class="help">In production each provider gets a personal link, so this is filled in for you.</span>
         </div>
+        <p class="hint" id="org-hint" style="margin:10px 0 0">Not listed? Choose “My organization isn’t listed” at the bottom of the list.</p>
+        <div id="neworg" hidden>
+          <h2 style="margin-top:16px">Your organization</h2>
+          <div class="row2">
+            <div class="field"><label class="lbl" for="np-orgname">Organization name <span class="help">(required)</span></label><input id="np-orgname" class="input wide" type="text" autocomplete="organization"></div>
+            <div class="field"><label class="lbl" for="np-domain">Email domain you send from <span class="help">(optional, e.g. provider.org)</span></label><input id="np-domain" class="input wide" type="text" autocomplete="off"></div>
+          </div>
+        </div>
       </div>
 
-      <div class="panel">
+      <div class="panel" id="beds-panel" hidden>
         <h2>Open beds right now</h2>
         <p class="hint">Enter a number for each bed you offer — <b>0</b> if full, <b>NA</b> if you don’t offer it. Grey numbers are your last update. Leave a whole site blank to skip it.</p>
         <div id="sites"></div>
+      </div>
+
+      <div class="panel" id="facs-panel" hidden>
+        <h2 id="facs-h">A facility that isn’t listed?</h2>
+        <p class="hint" id="facs-hint"></p>
+        <div id="new-facs"></div>
+        <div class="btnrow"><button type="button" class="btn" id="add-fac">Add a facility</button></div>
       </div>
 
       <div class="panel">
@@ -62,7 +77,7 @@
         <label class="toggle-row"><input type="checkbox" id="confirm"> <span>These counts are current as of now.</span></label>
         <div class="err" id="form-err" role="alert" hidden></div>
         <div class="btnrow">
-          <button type="submit" class="btn primary">Update the bed board</button>
+          <button type="submit" class="btn primary" id="submit">Update the bed board</button>
         </div>
       </div>
     </form>
@@ -80,6 +95,7 @@
   <script src="assets/store.js"></script>
   <script src="assets/common.js"></script>
   <script src="assets/editor.js"></script>
+  <script src="assets/facility.js"></script>
   <script src="assets/update.js"></script>
 </body>
 </html>

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Open Beds — Bed board</title>
+  <title>Allegheny County Bed Availability</title>
   <meta name="description" content="Live open-bed board for Pathways intake staff, fed by provider emails, a provider update form and DHS updates.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -32,7 +32,7 @@
 
   <main class="wrap">
     <section class="intro">
-      <h1>Where can I send someone today?</h1>
+      <h1>Allegheny County Bed Availability</h1>
       <p class="meta" id="board-meta"></p>
     </section>
 
@@ -63,8 +63,11 @@
         <select id="f-pay" class="input"><option value="any">Any payment</option></select>
       </div>
       <div class="filter-col">
-        <label class="lbl" for="f-search">Search</label>
-        <input id="f-search" class="input" type="search" placeholder="Provider, organization or town" autocomplete="off">
+        <span class="lbl" id="f-loc-l">Locations</span>
+        <div class="locsel">
+          <button type="button" id="f-loc-btn" class="input selbtn" aria-haspopup="true" aria-expanded="false" aria-controls="f-loc-panel" aria-labelledby="f-loc-l f-loc-btn">All locations</button>
+          <div id="f-loc-panel" class="locpanel" hidden></div>
+        </div>
       </div>
       <div class="filter-col checks">
         <label class="check"><input type="checkbox" id="f-sud"> Substance use treatment only</label>

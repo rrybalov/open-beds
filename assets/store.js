@@ -65,7 +65,10 @@
     // Merge facilities added on the admin page into the shared site list.
     function hydrate(s) {
       (s.customOrgs || []).forEach(function (o) { if (!orgById[o.id]) { SITES.orgs.push(o); orgById[o.id] = o; } });
-      (s.customSites || []).forEach(function (p) { if (!siteById[p.id]) { SITES.sites.push(p); siteById[p.id] = p; } });
+      (s.customSites || []).forEach(function (p) {
+        if (!siteById[p.id]) { SITES.sites.push(p); siteById[p.id] = p; }
+        else siteById[p.id].pending = p.pending; // approval may have happened in another tab
+      });
     }
     function dropCustom() {
       for (var i = SITES.sites.length - 1; i >= 0; i--) if (SITES.sites[i].custom) { delete siteById[SITES.sites[i].id]; SITES.sites.splice(i, 1); }
@@ -117,7 +120,7 @@
     function boardSites() {
       var cur = current();
       var refs = reports().filter(function (r) { return r.source === "referral" && r.status === "published"; });
-      return SITES.sites.map(function (p) {
+      return SITES.sites.filter(function (p) { return !p.pending; }).map(function (p) {
         var c = cur[p.id];
         var site = {
           id: p.id, name: p.name, fullName: p.fullName, org: orgById[p.org].short, orgId: p.org, town: p.town, region: p.region,
@@ -177,22 +180,26 @@
       return r;
     }
 
-    // A new facility, with its first counts as a DHS update.
-    function addSite(input) {
-      var r = null;
+    // New facilities (and maybe a new provider). From DHS they publish at once; from the provider
+    // form they wait for DHS review and stay off the board until approved.
+    function addSites(input) {
+      var review = !!input.review, r = null;
       mutate(function (st) {
         st.customSites = st.customSites || [];
         st.customOrgs = st.customOrgs || [];
         if (input.org) st.customOrgs.push(input.org);
-        st.customSites.push(input.site);
-        if (input.entry) {
-          r = { id: uid(), source: "admin", status: "published", receivedAt: nowIso(), orgId: input.site.org,
-            by: "DHS admin" + (input.by ? ": " + input.by : ""), reason: input.reason || "New facility added", entries: [input.entry] };
-          st.reports.push(r);
-        }
+        input.sites.forEach(function (x) { x.site.pending = review; st.customSites.push(x.site); });
         hydrate(st);
+        r = { id: uid(), source: input.source || "admin", status: review ? "review" : "published", receivedAt: nowIso(),
+          orgId: input.sites[0].site.org, by: input.by, reason: input.reason,
+          newSites: input.sites.map(function (x) { return x.site.id; }), newOrg: input.org ? input.org.id : null,
+          entries: input.sites.map(function (x) { return x.entry; }).filter(Boolean) };
+        st.reports.push(r);
       });
       return r;
+    }
+    function addSite(input) {
+      return addSites({ org: input.org, sites: [{ site: input.site, entry: input.entry }], by: "DHS admin" + (input.by ? ": " + input.by : ""), reason: input.reason || "New facility added", source: "admin" });
     }
 
     function decide(id, status, opts) {
@@ -205,6 +212,10 @@
           r.decidedBy = opts.by || "DHS admin";
           if (opts.entries) r.entries = opts.entries;
           if (opts.orgId) r.orgId = opts.orgId;
+          // Approving a provider's new facility puts it on the board.
+          if (r.newSites) (st.customSites || []).forEach(function (p) {
+            if (r.newSites.indexOf(p.id) > -1) { p.pending = status !== "published"; if (siteById[p.id]) siteById[p.id].pending = p.pending; }
+          });
         });
       });
     }
@@ -212,7 +223,7 @@
     return {
       sites: SITES, siteById: siteById, orgById: orgById,
       reports: reports, current: current, boardSites: boardSites,
-      receiveEmail: receiveEmail, submitForm: submitForm, adminUpdate: adminUpdate, refer: refer, addSite: addSite,
+      receiveEmail: receiveEmail, submitForm: submitForm, adminUpdate: adminUpdate, refer: refer, addSite: addSite, addSites: addSites,
       undoReferral: function (id, opts) { decide(id, "undone", opts); },
       publish: function (id, opts) { decide(id, "published", opts); },
       reject: function (id, opts) { decide(id, "rejected", opts); },

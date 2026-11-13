@@ -486,3 +486,56 @@ span.src-chip { background: none; border: 0; padding: 0; color: var(--slate); fo
   .card > .side { grid-column: 3; grid-row: 1 / span 2; }
   .card > .bedwrap { grid-column: 2 / 3; grid-row: 2; }
 }
+
+/* Locations multiselect */
+.locsel { position: relative; }
+.selbtn { min-width: 240px; text-align: left; cursor: pointer; background: var(--white) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%233D3D4B' stroke-width='2'/%3E%3C/svg%3E") no-repeat right 14px center; padding-right: 36px; font: inherit; color: var(--black); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.locpanel { position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; width: 340px; max-width: calc(100vw - 32px); max-height: 420px; overflow: auto; background: var(--white); border: 1px solid var(--ash); border-radius: 10px; box-shadow: 0 10px 30px rgba(18, 18, 33, .18); padding: 8px 0 0; }
+.locpanel .check { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 4px 14px; margin: 0; }
+.locpanel .check:hover { background: var(--smoke); }
+.locpanel .help { color: var(--stone); font-size: 12.5px; margin-left: auto; padding-left: 8px; text-align: right; }
+.loc-all { font-weight: 700; border-bottom: 1px solid var(--ash); }
+.loc-group { border: 0; margin: 0; padding: 4px 0; border-bottom: 1px solid var(--ash); }
+.loc-org { font-weight: 700; }
+.loc-site:not(.solo) { padding-left: 38px !important; }
+.locpanel-foot { position: sticky; bottom: 0; display: flex; justify-content: flex-end; gap: 8px; padding: 10px 14px; background: var(--white); border-top: 1px solid var(--ash); }
+@media (max-width: 760px) { .selbtn { width: 100%; } .locpanel { width: 100%; } }
+
+/* Admin: actions bar + one updates list */
+.admin-actions { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 12px 20px; margin: 4px 0 18px; }
+.pick-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.pick-row .sel-in { min-width: 300px; max-width: 100%; }
+.ui-item { display: flex; gap: 16px; justify-content: space-between; align-items: flex-start; background: var(--white); border: 1px solid var(--ash); border-radius: var(--radius); padding: 12px 16px; margin-bottom: 8px; }
+.ui-item.review { border-color: var(--yellow); box-shadow: inset 4px 0 0 #B07A1E; }
+.ui-item.off .ui-what, .ui-item.off .ui-top b { color: var(--stone); }
+.ui-main { min-width: 0; flex: 1; }
+.ui-top { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font-size: 14px; }
+.ui-top b { font-size: 15px; }
+.ui-time { color: var(--slate); font-size: 13px; }
+.ui-status { font-size: 13px; font-weight: 700; color: #7A5300; }
+.ui-status.st-rejected, .ui-status.st-undone { color: #9B2C1F; }
+.ui-what { margin: 4px 0 0; font-size: 14px; color: var(--black); }
+.ui-reason { color: var(--slate); font-style: italic; }
+.ui-warn { margin: 4px 0 0; font-size: 13px; color: #7A5300; }
+.ui-act { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; flex: none; max-width: 50%; }
+.ui-item .assign { margin-top: 8px; }
+details.sim summary { cursor: pointer; list-style: none; }
+details.sim summary::-webkit-details-marker { display: none; }
+details.sim summary h2 { display: inline; margin: 0; font-size: 16px; }
+details.sim summary::after { content: " ▸"; color: var(--stone); }
+details.sim[open] summary::after { content: " ▾"; }
+.nf-beds .site-edit-h { display: none; }
+@media (max-width: 760px) {
+  .ui-item { flex-direction: column; }
+  .ui-act { max-width: none; justify-content: flex-start; }
+  .pick-row .sel-in { min-width: 0; width: 100%; }
+}
+
+/* Provider form: new facilities */
+.newfac { border: 1px solid var(--ash); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 12px; background: var(--white); }
+.newfac-h { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.newfac-h h3 { margin: 0; font-size: 17px; }
+.newfac .form-sub, .addsite .form-sub { margin: 18px 0 8px; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--dark-blue); }
+.ui-status { background: none !important; padding: 0 !important; border: 0 !important; }
+.linkbtn.danger { color: #9B2C1F; }
+.ui-act { gap: 8px 14px; }

@@ -11,7 +11,7 @@
   var TYPE_LABEL = OB.TYPE_LABEL;
   var SEX_SHORT = { male: "M", female: "F", any: "" };
 
-  var state = { type: "any", sex: "any", age: "adult", loca: "any", pay: "any", q: "", sudOnly: false, recentOnly: false, view: "find", mode: "list", sort: "region", origin: null, selected: null };
+  var state = { type: "any", sex: "any", age: "adult", loca: "any", pay: "any", locs: [], sudOnly: false, recentOnly: false, view: "find", mode: "list", sort: "region", origin: null, selected: null };
   var PAY = {};
   S.sites.payTypes.forEach(function (p) { PAY[p[0]] = { label: p[1], short: p[2] }; });
   // true = known to take it, false = known not to, undefined = not on file
@@ -89,10 +89,7 @@
     if (state.recentOnly && (site.noReport || OB.when(site.report.receivedAt).hours >= 24)) return false;
     if (state.loca !== "any" && !((site.fit.levels || []).indexOf(state.loca) > -1)) return false;
     if (state.pay !== "any" && payStatus(site) === false) return false;
-    if (state.q) {
-      var hay = [site.name, site.fullName, site.org, site.town].join(" ").toLowerCase();
-      if (hay.indexOf(state.q) < 0) return false;
-    }
+    if (state.locs.length && state.locs.indexOf(site.id) < 0) return false;
     return true;
   }
   function regionOrder(site) { return REGIONS[site.region].order; }
@@ -235,7 +232,6 @@
   // Plain-text notes under the table (no tags).
   function bedNotes(site) {
     var out = [];
-    if (site.sexSplitInferred) out.push("Men and women read from unlabeled columns in the provider’s table.");
     if (state.pay !== "any") out.push(payStatus(site) === true ? "On file as taking " + PAY[state.pay].short + "." : PAY[state.pay].short + " isn’t on file — ask when you call.");
     (site.notes || []).forEach(function (n) { out.push("Provider note: " + n); });
     return out.length ? '<ul class="bed-notes">' + out.map(function (n) { return "<li>" + esc(n) + "</li>"; }).join("") + "</ul>" : "";
@@ -244,7 +240,6 @@
     var m = [];
     if (site.services.indexOf("SUD") < 0) m.push("Mental health only — no substance use treatment");
     if (site.population === "adolescent") m.push("Adolescent unit");
-    if (site.custom) m.push("Added by DHS");
     return m.length ? '<p class="meta">' + esc(m.join(" · ")) + "</p>" : "";
   }
   function dayWord(label) { return label.replace(/^Today /, "today ").replace(/^Yesterday /, "yesterday "); }
@@ -792,7 +787,71 @@
   });
   $("f-pay").innerHTML += S.sites.payTypes.map(function (p) { return '<option value="' + p[0] + '">' + esc(p[1]) + "</option>"; }).join("");
   $("f-pay").addEventListener("change", function (e) { state.pay = e.target.value; render(); });
-  $("f-search").addEventListener("input", function (e) { state.q = e.target.value.trim().toLowerCase(); render(); });
+  // ---------- locations multiselect ----------
+  // Empty selection = all locations. Grouped by provider; a provider box selects all its sites.
+  function locLabel() {
+    if (!state.locs.length) return "All locations";
+    if (state.locs.length === 1) return S.siteById[state.locs[0]] ? S.siteById[state.locs[0]].name : "1 location";
+    return state.locs.length + " locations";
+  }
+  function buildLocPanel() {
+    var groups = S.sites.orgs.map(function (o) {
+      return { org: o, sites: S.boardSites().filter(function (x) { return x.orgId === o.id; }) };
+    }).filter(function (g) { return g.sites.length; });
+    $("f-loc-panel").innerHTML =
+      '<label class="check loc-all"><input type="checkbox" id="f-loc-all"' + (state.locs.length ? "" : " checked") + "> All locations</label>" +
+      groups.map(function (g) {
+        var on = g.sites.filter(function (x) { return state.locs.indexOf(x.id) > -1; }).length;
+        var one = g.sites.length === 1;
+        return '<fieldset class="loc-group"><legend class="sr">' + esc(g.org.name) + "</legend>" +
+          (one ? "" : '<label class="check loc-org"><input type="checkbox" data-org="' + esc(g.org.id) + '"' + (on === g.sites.length ? " checked" : "") + "> " + esc(g.org.name) + " <span class=\"help\">(all " + g.sites.length + ")</span></label>") +
+          g.sites.map(function (x) {
+            return '<label class="check loc-site' + (one ? " solo" : "") + '"><input type="checkbox" data-loc="' + esc(x.id) + '"' + (state.locs.indexOf(x.id) > -1 ? " checked" : "") + "> " + esc(x.name) +
+              ' <span class="help">' + esc(one ? x.org + " · " + x.town : x.town) + "</span></label>";
+          }).join("") + "</fieldset>";
+      }).join("") +
+      '<div class="locpanel-foot"><button type="button" class="btn small" id="f-loc-clear">Clear</button><button type="button" class="btn small primary" id="f-loc-done">Done</button></div>';
+    Array.prototype.forEach.call(document.querySelectorAll("#f-loc-panel [data-org]"), function (el) {
+      var ids = S.boardSites().filter(function (x) { return x.orgId === el.getAttribute("data-org"); }).map(function (x) { return x.id; });
+      var on = ids.filter(function (id) { return state.locs.indexOf(id) > -1; }).length;
+      el.indeterminate = on > 0 && on < ids.length;
+    });
+  }
+  function setLocs(ids) {
+    var all = S.boardSites().map(function (x) { return x.id; });
+    state.locs = ids.length >= all.length ? [] : ids;
+    $("f-loc-btn").textContent = locLabel();
+    var keep = document.activeElement && document.activeElement.closest("#f-loc-panel") ? (document.activeElement.getAttribute("data-loc") || document.activeElement.getAttribute("data-org") || document.activeElement.id) : null;
+    buildLocPanel();
+    if (keep) { var back = document.querySelector('#f-loc-panel [data-loc="' + keep + '"], #f-loc-panel [data-org="' + keep + '"], #f-loc-panel #' + keep); if (back) back.focus(); }
+    render();
+  }
+  function openLoc(open) {
+    $("f-loc-panel").hidden = !open;
+    $("f-loc-btn").setAttribute("aria-expanded", open);
+    if (open) { buildLocPanel(); var f = $("f-loc-panel").querySelector("input"); if (f) f.focus(); }
+  }
+  $("f-loc-btn").addEventListener("click", function () { openLoc($("f-loc-panel").hidden); });
+  $("f-loc-panel").addEventListener("change", function (e) {
+    var el = e.target, ids = state.locs.slice();
+    if (el.id === "f-loc-all") { setLocs([]); return; }
+    if (el.hasAttribute("data-org")) {
+      var orgIds = S.boardSites().filter(function (x) { return x.orgId === el.getAttribute("data-org"); }).map(function (x) { return x.id; });
+      ids = ids.filter(function (id) { return orgIds.indexOf(id) < 0; });
+      if (el.checked) ids = ids.concat(orgIds);
+    } else if (el.hasAttribute("data-loc")) {
+      var id = el.getAttribute("data-loc");
+      ids = ids.filter(function (x) { return x !== id; });
+      if (el.checked) ids.push(id);
+    }
+    setLocs(ids);
+  });
+  $("f-loc-panel").addEventListener("click", function (e) {
+    if (e.target.id === "f-loc-done") { openLoc(false); $("f-loc-btn").focus(); }
+    if (e.target.id === "f-loc-clear") setLocs([]);
+  });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape" && !$("f-loc-panel").hidden) { openLoc(false); $("f-loc-btn").focus(); } });
+  document.addEventListener("click", function (e) { if (!$("f-loc-panel").hidden && !e.target.closest(".locsel")) openLoc(false); });
   $("f-sud").addEventListener("change", function (e) { state.sudOnly = e.target.checked; render(); });
   $("f-fresh").addEventListener("change", function (e) { state.recentOnly = e.target.checked; render(); });
   $("f-sort").addEventListener("change", function (e) { state.sort = e.target.value; render(); });

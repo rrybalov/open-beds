@@ -1,66 +1,102 @@
-/* Open Beds — admin: email inbox and review, site updates, activity, settings. */
+/* Open Beds — admin: every update in one list (email, provider form, DHS, referrals), plus settings. */
 (function () {
   "use strict";
-  var S = window.OpenBedsStore, OB = window.OB, ED = window.OpenBedsEditor, esc = OB.esc;
+  var S = window.OpenBedsStore, OB = window.OB, ED = window.OpenBedsEditor, FAC = window.OpenBedsFacility, esc = OB.esc;
   function $(id) { return document.getElementById(id); }
-  var ui = { tab: "inbox", mailFilter: "all", staleOnly: false };
+  var ui = { tab: "updates", filter: "all" };
   var lastFocus = null;
 
   function siteName(id) { return S.siteById[id] ? S.siteById[id].name : id; }
   function orgShort(id) { return id && S.orgById[id] ? S.orgById[id].short : "Unknown sender"; }
-  var STATUS = { published: "Published", review: "Needs review", rejected: "Rejected", undone: "Undone" };
-  function statusChip(r) {
-    var label = r.status === "published" && r.source === "email" ? (r.auto ? "Auto-published" : "Published by DHS") :
-      r.status === "published" && r.source === "referral" ? "On the board" : STATUS[r.status];
-    return '<span class="status-chip st-' + r.status + '">' + esc(label) + "</span>";
-  }
+  function liveSites() { return S.sites.sites.filter(function (s) { return !s.pending; }); }
 
-  // ---------- inbox ----------
-  var FILTERS = [["all", "All"], ["review", "Needs review"], ["published", "Published"], ["rejected", "Rejected"]];
-  function renderMailFilter() {
-    $("mail-filter").innerHTML = FILTERS.map(function (f) {
-      var id = "mf-" + f[0];
-      return '<input type="radio" name="mf" id="' + id + '" value="' + f[0] + '"' + (ui.mailFilter === f[0] ? " checked" : "") + '><label for="' + id + '">' + f[1] + "</label>";
+  // ---------- updates ----------
+  var FILTERS = [["all", "All"], ["review", "Needs review"], ["email", "Email"], ["form", "Provider form"], ["admin", "DHS"], ["referral", "Referrals"]];
+  function renderFilter() {
+    $("upd-filter").innerHTML = FILTERS.map(function (f) {
+      var id = "uf-" + f[0];
+      return '<input type="radio" name="uf" id="' + id + '" value="' + f[0] + '"' + (ui.filter === f[0] ? " checked" : "") + '><label for="' + id + '">' + f[1] + "</label>";
     }).join("");
   }
 
-  function mailItem(r) {
-    var f = OB.when(r.receivedAt);
-    var siteOpts = '<option value="">Assign to site…</option>' + S.sites.sites.map(function (s) { return '<option value="' + s.id + '">' + esc(s.name + " — " + S.orgById[s.org].short) + "</option>"; }).join("");
-    var parsed = r.entries.map(function (e, i) {
-      if (e.siteId) return "<li><b>" + esc(siteName(e.siteId)) + "</b> — " + esc(OB.entrySummary(e)) + (e.notes && e.notes.length ? " · " + esc(e.notes.join("; ")) : "") + "</li>";
-      return '<li><div class="assign"><span>' + esc(OB.entrySummary(e)) + '</span><label class="sr" for="as-' + r.id + "-" + i + '">Site for these counts</label><select class="sel-in" id="as-' + r.id + "-" + i + '" data-assign="' + r.id + '" data-idx="' + i + '">' + siteOpts + "</select></div></li>";
-    }).join("");
-    var warns = (r.parse.warnings || []).map(function (w) { return '<span class="pill warn">' + esc(w) + "</span>"; }).join("");
-    var actions = "";
-    if (r.status === "review") actions = '<button type="button" class="btn primary small" data-act="publish" data-id="' + r.id + '">Publish</button><button type="button" class="btn small" data-act="edit" data-id="' + r.id + '">Edit counts, then publish</button><button type="button" class="btn danger small" data-act="reject" data-id="' + r.id + '">Reject</button>';
-    else if (r.status === "published") actions = '<button type="button" class="btn small" data-act="edit" data-id="' + r.id + '">Correct counts</button><button type="button" class="btn danger small" data-act="reject" data-id="' + r.id + '">Unpublish</button>';
-    else actions = '<button type="button" class="btn small" data-act="publish" data-id="' + r.id + '">Publish anyway</button>';
-    return '<article class="mail' + (r.status === "review" ? " review" : "") + '" id="mail-' + r.id + '"><div class="mail-top">' + statusChip(r) + "<b>" + esc(orgShort(r.orgId)) + '</b><span class="fr ' + f.level + '">' + esc(f.label) + '</span><span class="conf">Parser confidence: ' + esc(r.parse.confidence) + "</span></div>" +
-      '<div class="mail-meta">From ' + esc(r.email.from) + " · “" + esc(r.email.subject) + "”</div>" +
-      (parsed ? '<ul class="parsed">' + parsed + "</ul>" : "<p class=\"hint\">No counts found.</p>") +
-      (warns ? '<div class="warns">' + warns + "</div>" : "") +
-      '<details><summary class="conf" style="cursor:pointer">Original email</summary><pre>' + esc(r.email.body) + "</pre></details>" +
-      '<div class="btnrow">' + actions + "</div></article>";
+  // What the update did, in one line.
+  function whatLine(r) {
+    if (r.source === "referral") {
+      var rf = r.referral;
+      return "One " + (rf.type === "shared" ? "detox or rehab" : OB.TYPE_LABEL[rf.type].toLowerCase()) + " bed" + (rf.sex === "male" ? " (men)" : rf.sex === "female" ? " (women)" : "") + " referred to " + siteName(rf.siteId);
+    }
+    if (r.newSites) return "New facilit" + (r.newSites.length === 1 ? "y" : "ies") + ": " + r.newSites.map(siteName).join(", ") + (r.newOrg ? " — new provider " + orgShort(r.newOrg) : "");
+    var named = r.entries.filter(function (e) { return e.siteId; }).map(function (e) { return siteName(e.siteId); });
+    var loose = r.entries.length - named.length;
+    if (!r.entries.length) return "No counts found";
+    return (named.length > 3 ? named.length + " sites: " + named.slice(0, 3).join(", ") + " and " + (named.length - 3) + " more" : named.join(", ")) +
+      (loose ? (named.length ? " · " : "") + OB.plural(loose, "count") + " not matched to a site" : "");
+  }
+  function whoLine(r) {
+    if (r.source === "referral") return "Pathways" + (r.by && r.by.indexOf(": ") > -1 ? " · " + r.by.split(": ")[1] : "");
+    if (r.source === "admin") return "DHS" + (r.by && r.by.indexOf(": ") > -1 ? " · " + r.by.split(": ")[1] : "");
+    return orgShort(r.orgId);
+  }
+  function statusText(r) {
+    if (r.status === "review") return r.newSites ? "Waiting for approval" : "Needs review";
+    if (r.status === "rejected") return r.source === "email" ? "Rejected" : "Removed";
+    if (r.status === "undone") return "Undone";
+    return "";
   }
 
-  function renderInbox() {
-    var mails = S.reports().filter(function (r) { return r.source === "email"; });
-    var list = mails.filter(function (r) { return ui.mailFilter === "all" || r.status === ui.mailFilter; });
+  function item(r) {
+    var f = OB.when(r.receivedAt), st = statusText(r);
+    var siteOpts = '<option value="">Assign to site…</option>' + liveSites().map(function (s) { return '<option value="' + s.id + '">' + esc(s.name + " — " + S.orgById[s.org].short) + "</option>"; }).join("");
+    var assign = r.status !== "published" && r.source === "email" ? r.entries.map(function (e, i) {
+      if (e.siteId) return "";
+      return '<div class="assign"><span>' + esc(OB.entrySummary(e)) + '</span><label class="sr" for="as-' + r.id + "-" + i + '">Site for these counts</label><select class="sel-in" id="as-' + r.id + "-" + i + '" data-assign="' + r.id + '" data-idx="' + i + '">' + siteOpts + "</select></div>";
+    }).join("") : "";
+    var warn = r.status === "review" && r.parse && r.parse.warnings && r.parse.warnings.length ? '<p class="ui-warn">' + esc(r.parse.warnings[0]) + "</p>" : "";
+    var view = '<button type="button" class="linkbtn" data-report="' + esc(r.id) + '" aria-haspopup="dialog">' + (r.source === "email" ? "View email" : "View details") + "</button>";
+    var acts = [];
+    // Buttons only where a decision is waiting; everything else is a quiet link.
+    function btn(act, label, cls) {
+      var look = r.status === "review" ? "btn small" + (cls ? " " + cls : "") : "linkbtn" + (cls === "danger" ? " danger" : "");
+      acts.push('<button type="button" class="' + look + '" data-act="' + act + '" data-id="' + r.id + '">' + label + "</button>");
+    }
+    if (r.status === "review") {
+      btn("publish", r.newSites ? "Approve" : "Publish", "primary");
+      if (r.source === "email") btn("edit", "Edit counts");
+      btn("reject", "Reject", "danger");
+    } else if (r.status === "published") {
+      if (r.source === "referral") btn("undo", "Undo");
+      else { if (r.source === "email") btn("edit", "Correct"); btn("reject", r.source === "email" ? "Unpublish" : "Remove", "danger"); }
+    } else if (r.status === "rejected" && r.source === "email") btn("publish", "Publish anyway");
+    return '<article class="ui-item' + (r.status === "review" ? " review" : "") + (r.status === "rejected" || r.status === "undone" ? " off" : "") + '" id="u-' + r.id + '">' +
+      '<div class="ui-main"><p class="ui-top"><b>' + esc(whoLine(r)) + '</b><span class="upd-src">' + (OB.ICON[r.source] || "") + esc(OB.SOURCE[r.source].label) + "</span>" +
+      '<span class="ui-time">' + esc(f.label) + "</span>" + (st ? '<span class="ui-status st-' + r.status + '">' + esc(st) + "</span>" : "") + "</p>" +
+      '<p class="ui-what">' + esc(whatLine(r)) + (r.reason && r.source !== "email" ? ' <span class="ui-reason">“' + esc(r.reason) + "”</span>" : "") + "</p>" +
+      warn + assign + "</div>" +
+      '<div class="ui-act">' + view + acts.join("") + "</div></article>";
+  }
+
+  function renderUpdates() {
+    var all = S.reports();
+    var list = all.filter(function (r) {
+      if (ui.filter === "all") return true;
+      if (ui.filter === "review") return r.status === "review";
+      return r.source === ui.filter;
+    });
     list.sort(function (a, b) { return (a.status === "review" ? 0 : 1) - (b.status === "review" ? 0 : 1) || new Date(b.receivedAt) - new Date(a.receivedAt); });
-    $("mail-list").innerHTML = list.length ? list.map(mailItem).join("") : '<div class="empty">No emails here.</div>';
+    $("upd-list").innerHTML = list.length ? list.slice(0, 80).map(item).join("") : '<div class="empty">Nothing here.</div>';
   }
 
-  function onInboxClick(e) {
+  function onUpdateClick(e) {
     var b = e.target.closest("[data-act]");
     if (!b) return;
     var id = b.getAttribute("data-id");
     var r = S.reports().filter(function (x) { return x.id === id; })[0];
     var act = b.getAttribute("data-act");
-    if (act === "reject") { S.reject(id); say((r.status === "published" ? "Unpublished" : "Rejected") + " the " + orgShort(r.orgId) + " email."); return; }
+    if (act === "undo") { S.undoReferral(id, { by: "DHS admin" }); say("Referral undone — the bed is back on the board."); return; }
+    if (act === "reject") { S.reject(id); say(r.status === "published" ? "Removed from the board." : "Rejected."); return; }
     var entries = assigned(r);
     if (!entries) { say("Assign every count to a site first."); var sel = document.querySelector('[data-assign="' + id + '"]'); if (sel) sel.focus(); return; }
-    if (act === "publish") { S.publish(id, { entries: entries }); say("Published. The bed board is updated."); return; }
+    if (act === "publish") { S.publish(id, { entries: entries }); say(r.newSites ? "Approved — the new facilit" + (r.newSites.length === 1 ? "y is" : "ies are") + " on the board." : "Published. The bed board is updated."); return; }
     if (act === "edit") openEmailEdit(r, entries);
   }
 
@@ -76,6 +112,7 @@
     return ok ? entries : null;
   }
 
+  // ---------- email simulator ----------
   function receiveSimulated() {
     var em = { from: $("sim-from").value.trim(), subject: $("sim-subject").value.trim(), body: $("sim-body").value };
     if (!em.body.trim()) { $("sim-result").innerHTML = '<p class="err">Paste an email body first.</p>'; return; }
@@ -84,12 +121,11 @@
       ? "Published automatically — " + esc(r.parse.summary) + '. <a href="index.html">See the board</a>.'
       : "Held for review — " + esc((r.parse.warnings || [])[0] || "low confidence") + ".";
     $("sim-result").innerHTML = '<p class="hint" style="margin-top:12px">' + msg + "</p>";
-    ui.mailFilter = r.status === "review" ? "review" : "all";
+    ui.filter = r.status === "review" ? "review" : "all";
     renderAll();
-    var el = $("mail-" + r.id);
+    var el = $("u-" + r.id);
     if (el) el.scrollIntoView({ block: "nearest" });
   }
-
   function loadExample() {
     var key = $("sim-example").value;
     var all = window.OPEN_BEDS_EMAILS.samples.concat(window.OPEN_BEDS_EMAILS.extras);
@@ -154,152 +190,63 @@
     });
   }
 
-
-  // ---------- add a facility ----------
-  // Every bed type is offered on a new facility; blanks mean "not reported yet".
-  var FULL_LAYOUT = [
-    { type: "detox", sexes: ["male", "female", "any"] },
-    { type: "residential", sexes: ["male", "female", "any"] },
-    { type: "php", sexes: ["male", "female", "any"] },
-    { type: "outpatient", mode: "yesno" }
-  ];
-  function slug(t) { return String(t).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "site"; }
-  function geocode(q) {
-    return fetch("https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=us&viewbox=-80.6,42.3,-74.6,39.6&q=" + encodeURIComponent(q), { headers: { Accept: "application/json" } })
-      .then(function (r) { return r.ok ? r.json() : []; })
-      .then(function (j) { return j && j[0] ? { lat: +j[0].lat, lng: +j[0].lon } : null; })
-      .catch(function () { return null; });
-  }
   function openAddFacility() {
-    var temp = { id: "new", name: "New facility", beds: FULL_LAYOUT };
     var orgOpts = S.sites.orgs.map(function (o) { return '<option value="' + esc(o.id) + '">' + esc(o.name) + "</option>"; }).join("");
-    var regionOpts = Object.keys(S.sites.regions).sort(function (a, b) { return S.sites.regions[a].order - S.sites.regions[b].order; })
-      .map(function (k) { return '<option value="' + k + '">' + esc(S.sites.regions[k].label) + "</option>"; }).join("");
-    var levels = S.sites.levels.map(function (l) { return '<label class="check"><input type="checkbox" name="nf-lv" value="' + esc(l[0]) + '"> ' + esc(l[1]) + ' <span class="help">' + esc(l[2]) + "</span></label>"; }).join("");
     var html = '<form novalidate class="addsite"><h2 id="dlg-h">Add a facility</h2>' +
-      '<p class="hint">The facility appears on the bed board right away. Every bed type is available — leave blank anything they don’t offer or didn’t report.</p>' +
-      '<h3 class="form-sub">Facility</h3>' +
-      '<div class="row2"><div class="field"><label class="lbl" for="nf-name">Facility name <span class="help">(required)</span></label><input id="nf-name" class="input wide" type="text" autocomplete="off"></div>' +
-      '<div class="field"><label class="lbl" for="nf-org">Provider</label><select id="nf-org" class="sel-in">' + orgOpts + '<option value="__new">New provider…</option></select></div></div>' +
-      '<div class="row2" id="nf-neworg" hidden><div class="field"><label class="lbl" for="nf-orgname">Provider name <span class="help">(required)</span></label><input id="nf-orgname" class="input wide" type="text" autocomplete="off"></div>' +
-      '<div class="field"><label class="lbl" for="nf-domain">Email domain they send from <span class="help">(optional, e.g. provider.org)</span></label><input id="nf-domain" class="input wide" type="text" autocomplete="off"></div></div>' +
-      '<div class="row2"><div class="field"><label class="lbl" for="nf-address">Street address <span class="help">(optional — places it on the map)</span></label><input id="nf-address" class="input wide" type="text" autocomplete="off"></div>' +
-      '<div class="field"><label class="lbl" for="nf-town">Town <span class="help">(required)</span></label><input id="nf-town" class="input wide" type="text" autocomplete="off"></div></div>' +
-      '<div class="row2"><div class="field"><label class="lbl" for="nf-region">Region</label><select id="nf-region" class="sel-in">' + regionOpts + "</select></div>" +
-      '<div class="field"><span class="lbl" id="nf-pop-l">Serves</span><div class="radio-row" role="radiogroup" aria-labelledby="nf-pop-l"><label class="check"><input type="radio" name="nf-pop" value="adult" checked> Adults</label><label class="check"><input type="radio" name="nf-pop" value="adolescent"> Adolescents</label></div></div></div>' +
-      '<div class="field"><span class="lbl" id="nf-svc-l">Treats</span><div class="radio-row" role="group" aria-labelledby="nf-svc-l"><label class="check"><input type="checkbox" name="nf-svc" value="SUD" checked> Substance use</label><label class="check"><input type="checkbox" name="nf-svc" value="MH"> Mental health</label></div></div>' +
-      '<h3 class="form-sub">Admissions contact</h3>' +
-      '<div class="row3"><div class="field"><label class="lbl" for="nf-phone">Phone</label><input id="nf-phone" class="input wide" type="tel" autocomplete="off"></div>' +
-      '<div class="field"><label class="lbl" for="nf-email">Intake email</label><input id="nf-email" class="input wide" type="email" autocomplete="off"></div>' +
-      '<div class="field"><label class="lbl" for="nf-web">Website</label><input id="nf-web" class="input wide" type="url" autocomplete="off" placeholder="https://"></div></div>' +
-      '<h3 class="form-sub">Who they take</h3>' +
-      '<fieldset class="lv-grid"><legend class="lbl">LOCA levels they accept</legend>' + levels + "</fieldset>" +
-      '<div class="row2"><div class="field"><label class="lbl" for="nf-excl">Won’t take <span class="help">(optional, one per line)</span></label><textarea id="nf-excl" class="input wide" rows="2"></textarea></div>' +
-      '<div class="field"><label class="lbl" for="nf-pay">Payment <span class="help">(optional)</span></label><input id="nf-pay" class="input wide" type="text" placeholder="e.g. Medical Assistance and SCA"></div></div>' +
-      '<h3 class="form-sub">Open beds now</h3>' +
-      ED.siteBlock(temp, null, { prefix: "nf", mode: "admin" }) +
+      '<p class="hint">It appears on the bed board right away.</p>' +
+      '<div class="field"><label class="lbl" for="nf-org">Provider</label><select id="nf-org" class="sel-in" style="max-width:420px">' + orgOpts + '<option value="__new">New provider…</option></select></div>' +
+      '<div id="nf-neworg" hidden>' + FAC.providerFields("nf") + "</div>" +
+      FAC.fields("nf") +
       '<div class="row2"><div class="field"><label class="lbl" for="nf-by">Your name</label><input id="nf-by" class="input wide" type="text" autocomplete="name"></div>' +
       '<div class="field"><label class="lbl" for="nf-reason">Where the counts came from</label><input id="nf-reason" class="input wide" type="text" value="New facility added"></div></div>' +
-      '<div class="err" id="nf-err" role="alert" hidden></div>' +
       '<div class="btnrow"><button type="submit" class="btn primary" id="nf-save">Add to the board</button><button type="button" class="btn" data-cancel>Cancel</button></div></form>';
-    openDialog(html, saveFacility);
-    $("dlg").querySelector(".site-edit-h").hidden = true;
-    $("nf-org").addEventListener("change", function () { $("nf-neworg").hidden = $("nf-org").value !== "__new"; });
-
-    function saveFacility() {
-      var v = function (id) { return $(id).value.trim(); };
-      var errs = [];
-      var name = v("nf-name"), town = v("nf-town"), newOrg = $("nf-org").value === "__new";
-      if (!name) errs.push("Add the facility name.");
-      if (name && S.sites.sites.some(function (s) { return s.name.toLowerCase() === name.toLowerCase(); })) errs.push("A facility called “" + name + "” is already on the board.");
-      if (!town) errs.push("Add the town.");
-      if (newOrg && !v("nf-orgname")) errs.push("Add the provider’s name.");
-      if (v("nf-email") && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v("nf-email"))) errs.push("Check the intake email.");
-      var svc = Array.prototype.map.call(document.querySelectorAll('input[name="nf-svc"]:checked'), function (x) { return x.value; });
-      if (!svc.length) errs.push("Choose what they treat.");
-      var counts = ED.readSite(temp, { prefix: "nf" });
-      if (counts.errors.length) errs.push("Fix the highlighted counts.");
-      if (errs.length) { $("nf-err").textContent = errs.join(" "); $("nf-err").hidden = false; return; }
-
-      var id = slug(name) + "-" + Math.random().toString(36).slice(2, 6);
-      var org = null, orgId = $("nf-org").value;
-      if (newOrg) {
-        org = { id: "org-" + slug(v("nf-orgname")) + "-" + Math.random().toString(36).slice(2, 5), name: v("nf-orgname"), short: v("nf-orgname"),
-          senderDomains: v("nf-domain") ? [v("nf-domain").replace(/^.*@/, "").toLowerCase()] : [], custom: true };
-        orgId = org.id;
+    openDialog(html, function () {
+      var newOrg = $("nf-org").value === "__new";
+      var prov = newOrg ? FAC.readProvider("nf") : { errors: [] };
+      var fac = FAC.read("nf");
+      if (prov.errors.length || fac.errors.length) {
+        $("nf-ferr").textContent = prov.errors.concat(fac.errors).join(" ");
+        $("nf-ferr").hidden = false;
+        return;
       }
-      var excl = v("nf-excl") ? v("nf-excl").split(/\n|;/).map(function (x) { return x.trim(); }).filter(Boolean) : [];
-      var levelsSel = Array.prototype.map.call(document.querySelectorAll('input[name="nf-lv"]:checked'), function (x) { return x.value; });
-      var pop = document.querySelector('input[name="nf-pop"]:checked').value;
-      var site = {
-        id: id, org: orgId, name: name, aliases: [name.toLowerCase()], town: town, region: $("nf-region").value, population: pop, services: svc,
-        contact: v("nf-phone") || null, beds: FULL_LAYOUT, custom: true,
-        fit: { levels: levelsSel, serves: pop === "adult" ? "Adults" : "Adolescents", excludes: excl.length ? excl : undefined, payer: v("nf-pay") || undefined, known: [], source: ["admin"] },
-        reach: { phone: v("nf-phone") || null, phoneFrom: v("nf-phone") ? "DHS entry" : null, email: v("nf-email") || null, emailFrom: v("nf-email") ? "DHS entry" : null, web: v("nf-web") || null },
-        geo: null
-      };
-      var entry = counts.entry ? Object.assign(counts.entry, { siteId: id }) : null;
       $("nf-save").disabled = true;
       $("nf-save").textContent = "Adding…";
-      var where = (v("nf-address") ? v("nf-address") + ", " : "") + town + ", PA";
-      geocode(where).then(function (g) {
-        if (g) site.geo = { lat: g.lat, lng: g.lng, precision: v("nf-address") ? "address" : "town" };
-        S.addSite({ site: site, org: org, entry: entry, by: v("nf-by"), reason: v("nf-reason") || "New facility added" });
+      FAC.buildAll([fac], newOrg ? prov.org.id : $("nf-org").value, "admin").then(function (built) {
+        S.addSite({ site: built[0].site, org: newOrg ? prov.org : null, entry: built[0].entry, by: $("nf-by").value.trim(), reason: $("nf-reason").value.trim() });
         closeDialog();
-        say(name + " added to the board" + (entry ? " with its counts" : " — no counts yet") + (site.geo ? "." : ". It isn’t on the map: the address couldn’t be looked up."));
+        say(fac.data.name + " added to the board" + (built[0].entry ? " with its counts" : " — no counts yet") + (built[0].site.geo ? "." : ". It isn’t on the map: the address couldn’t be looked up."));
       });
-    }
-  }
-
-  // ---------- sites ----------
-  function renderSites() {
-    var cur = S.current();
-    var refs = {};
-    S.boardSites().forEach(function (b) { if (b.referrals && b.referrals.length) refs[b.id] = b.referrals.length; });
-    var rows = S.sites.sites.filter(function (s) {
-      if (!ui.staleOnly) return true;
-      return !cur[s.id] || OB.when(cur[s.id].report.receivedAt).hours >= 24;
-    }).map(function (s) {
-      var c = cur[s.id];
-      var upd = c ? '<span class="fr ' + OB.when(c.report.receivedAt).level + '">' + esc(OB.when(c.report.receivedAt).label) + "</span> " + OB.sourceChip(c.report.source, c.report.id, s.id) : '<span class="fr stale">No update</span>';
-      return '<tr><th scope="row"><b>' + esc(s.name) + "</b>" + (s.custom ? ' <span class="conf">· added by DHS</span>' : "") + '<br><span class="conf">' + esc(S.orgById[s.org].short) + " · " + esc(s.town) + "</span></th><td>" + upd + '</td><td class="sum">' + esc(c ? OB.entrySummary(c.entry) : "—") +
-        (refs[s.id] ? '<br><span class="conf">' + OB.plural(refs[s.id], "referral") + " marked since — subtract from these counts</span>" : "") +
-        '</td><td><button type="button" class="btn small" data-site="' + s.id + '">Update<span class="sr"> ' + esc(s.name) + "</span></button></td></tr>";
     });
-    $("site-rows").innerHTML = rows.join("") || '<tr><td colspan="4">Every site has updated in the last 24 hours.</td></tr>';
+    $("nf-org").addEventListener("change", function () { $("nf-neworg").hidden = $("nf-org").value !== "__new"; });
   }
 
-  // ---------- activity ----------
-  var SRC = { email: "Email", form: "Provider form", admin: "DHS update" };
-  function renderActivity() {
-    $("act-rows").innerHTML = S.reports().map(function (r) {
-      var f = OB.when(r.receivedAt);
-      var names = r.source === "referral" ? [siteName(r.referral.siteId) + " — one " + (r.referral.type === "shared" ? "detox or rehab" : OB.TYPE_LABEL[r.referral.type].toLowerCase()) + " bed" + (r.referral.sex === "male" ? " (men)" : r.referral.sex === "female" ? " (women)" : "")]
-        : r.entries.map(function (e) { return e.siteId ? siteName(e.siteId) : "Unassigned"; });
-      return "<tr><td>" + esc(f.label) + "</td><td>" + OB.sourceChip(r.source, r.id) + "</td><td>" + esc(r.by) + (r.reason ? '<br><span class="conf">“' + esc(r.reason) + "”</span>" : "") +
-        '</td><td class="sum">' + esc(names.join(", ")) + "</td><td>" + statusChip(r) + "</td></tr>";
+  function renderSitePicker() {
+    var cur = S.current(), keep = $("pick-site").value;
+    $("pick-site").innerHTML = '<option value="">Choose a site…</option>' + liveSites().map(function (s) {
+      var c = cur[s.id], stale = !c || OB.when(c.report.receivedAt).hours >= 24;
+      return '<option value="' + s.id + '">' + esc(s.name + " — " + S.orgById[s.org].short + (stale ? " (no update in 24 h)" : "")) + "</option>";
     }).join("");
+    $("pick-site").value = keep;
   }
 
   // ---------- settings ----------
   function renderSettings() {
     $("set-auto").checked = !!S.settings().autoPublish;
     $("sender-rows").innerHTML = S.sites.orgs.map(function (o) {
-      var n = S.sites.sites.filter(function (s) { return s.org === o.id; }).length;
-      return "<tr><td>" + esc(o.name) + "</td><td>" + o.senderDomains.map(esc).join("<br>") + "</td><td>" + n + "</td></tr>";
+      var n = liveSites().filter(function (s) { return s.org === o.id; }).length;
+      return "<tr><td>" + esc(o.name) + "</td><td>" + (o.senderDomains.length ? o.senderDomains.map(esc).join("<br>") : '<span class="conf">None</span>') + "</td><td>" + n + "</td></tr>";
     }).join("");
   }
 
   // ---------- shell ----------
-  var TABS = [["inbox", "t-inbox", "p-inbox"], ["sites", "t-sites", "p-sites"], ["activity", "t-activity", "p-activity"], ["settings", "t-settings", "p-settings"]];
+  var TABS = [["updates", "t-updates", "p-updates"], ["settings", "t-settings", "p-settings"]];
   function say(msg) { $("a-status").textContent = msg; }
 
   function renderAll() {
-    var reps = S.reports();
-    var review = reps.filter(function (r) { return r.status === "review"; }).length;
-    var cur = S.current();
-    var fresh = S.sites.sites.filter(function (s) { return cur[s.id] && OB.when(cur[s.id].report.receivedAt).hours < 24; }).length;
-    $("admin-meta").textContent = fresh + " of " + S.sites.sites.length + " sites updated in the last 24 hours · " + OB.plural(review, "email") + " waiting for review.";
+    var review = S.reports().filter(function (r) { return r.status === "review"; }).length;
+    var cur = S.current(), live = liveSites();
+    var fresh = live.filter(function (s) { return cur[s.id] && OB.when(cur[s.id].report.receivedAt).hours < 24; }).length;
+    $("admin-meta").textContent = fresh + " of " + live.length + " sites updated in the last 24 hours · " + OB.plural(review, "update") + " waiting for review.";
     $("review-badge").hidden = !review;
     $("review-badge").textContent = review;
     $("review-badge").setAttribute("aria-label", review + " need review");
@@ -309,10 +256,9 @@
       $(t[1]).tabIndex = on ? 0 : -1;
       $(t[2]).hidden = !on;
     });
-    renderMailFilter();
-    renderInbox();
-    renderSites();
-    renderActivity();
+    renderFilter();
+    renderUpdates();
+    renderSitePicker();
     renderSettings();
   }
 
@@ -325,11 +271,13 @@
       ui.tab = next[0]; renderAll(); $(next[1]).focus();
     });
   });
-  $("mail-filter").addEventListener("change", function (e) { ui.mailFilter = e.target.value; renderInbox(); });
-  $("mail-list").addEventListener("click", onInboxClick);
-  $("site-rows").addEventListener("click", function (e) { var b = e.target.closest("[data-site]"); if (b) openSiteUpdate(b.getAttribute("data-site")); });
+  $("upd-filter").addEventListener("change", function (e) { ui.filter = e.target.value; renderUpdates(); });
+  $("upd-list").addEventListener("click", onUpdateClick);
   $("add-site").addEventListener("click", openAddFacility);
-  $("stale-only").addEventListener("change", function (e) { ui.staleOnly = e.target.checked; renderSites(); });
+  $("pick-go").addEventListener("click", function () {
+    if (!$("pick-site").value) { say("Choose a site to update."); $("pick-site").focus(); return; }
+    openSiteUpdate($("pick-site").value);
+  });
   $("set-auto").addEventListener("change", function (e) { S.setSetting("autoPublish", e.target.checked); say(e.target.checked ? "Recognized emails will publish automatically." : "Every email will wait for review."); });
   $("reset").addEventListener("click", function () { S.reset(); say("Demo data reset to the 7 sample emails."); });
 
