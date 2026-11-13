@@ -7,30 +7,27 @@
   <meta name="description" content="DHS admin for the Open Beds board: every update, review, new facilities and settings.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Crect width=%2716%27 height=%2716%27 rx=%273%27 fill=%27%23262673%27/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="assets/styles.css?v=202611132114">
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Ccircle cx=%2712%27 cy=%2712%27 r=%279.5%27 fill=%27none%27 stroke=%27%23262673%27 stroke-width=%272%27 stroke-dasharray=%273 2.4%27/%3E%3Ccircle cx=%2712%27 cy=%2712%27 r=%274.5%27 fill=%27%23262673%27/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="assets/styles.css?v=202611132133">
+  <link rel="stylesheet" href="assets/colab.css?v=202611132133">
 </head>
 <body>
   <a class="skip" href="#admin-main">Skip to content</a>
-  <header class="topbar">
-    <div class="wrap topbar-inner">
-      <div class="brand">
-        <span class="brand-name">Open Beds</span>
-        <span class="brand-sub">Pathways · Allegheny County DHS</span>
-      </div>
-      <nav class="mainnav" aria-label="Main">
-        <a href="index.html">Bed board</a>
-        <a href="update.html">Update your beds</a>
-        <a href="admin.html" aria-current="page">Admin</a>
-      </nav>
-    </div>
-  </header>
-  <div class="demo-bar" role="note"><div class="wrap">Prototype admin — no sign-in, changes save only in this browser. In production this page sits behind county sign-in.</div></div>
+<div class="hub">
+  <nav class="sidebar" aria-label="Open Beds">
+    <a class="brand" href="index.html"><svg class="icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9.5" stroke-dasharray="3 2.4"/><circle cx="12" cy="12" r="4.2" fill="currentColor" stroke="none"/></svg>Open Beds</a>
+    <a class="side-link" href="index.html"><svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 20V6M21 20v-6a3 3 0 0 0-3-3h-8v6M3 17h18"/><circle cx="6.5" cy="11.5" r="1.8"/></svg>Bed Board</a>
+    <a class="side-link" href="update.html"><svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M14 6l4 4"/></svg>Update Beds</a>
+    <a class="side-link" href="admin.html" aria-current="page"><svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10h18M12 3l9 5H3zM5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 21h18"/></svg>DHS Admin</a>
+    <div class="side-divider" role="separator"></div>
+    <a class="side-link" href="https://rrybalov.github.io/colab-client-profile/"><svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5V21h-6v-6H9v6H3z"/></svg>CoLab Home</a>
+    <p class="side-note"><svg class="icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>Prototype · no sign-in; saved only in this browser</p>
+  </nav>
 
-  <main class="wrap" id="admin-main" tabindex="-1">
+  <main class="hub-main" id="admin-main" tabindex="-1">
     <section class="page-h">
-      <h1>Admin</h1>
+      <h1 class="page-title"><svg class="icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10h18M12 3l9 5H3zM5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 21h18"/></svg>Admin</h1>
       <p id="admin-meta"></p>
     </section>
 
@@ -42,6 +39,7 @@
       <button type="button" class="btn primary" id="add-site">Add a facility</button>
     </div>
 
+    <section class="panel-card board-card admin-card" aria-label="Updates and settings">
     <div class="viewbar">
       <div class="tabs" role="tablist" aria-label="Admin sections">
         <button type="button" role="tab" id="t-updates" aria-controls="p-updates" aria-selected="true">Updates<span class="badge" id="review-badge" hidden></span></button>
@@ -92,20 +90,21 @@
         <button type="button" class="btn danger" id="reset">Reset demo data</button>
       </div>
     </section>
+    </section>
   </main>
-
-  <div class="dialog-wrap" id="dlg-wrap" hidden>
+</div>
+<div class="dialog-wrap" id="dlg-wrap" hidden>
     <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dlg-h" id="dlg"></div>
   </div>
 
-  <script src="data/sites.js?v=202611132114"></script>
-  <script src="data/sample-emails.js?v=202611132114"></script>
-  <script src="assets/parser.js?v=202611132114"></script>
-  <script src="assets/store.js?v=202611132114"></script>
-  <script src="assets/common.js?v=202611132114"></script>
-  <script src="assets/editor.js?v=202611132114"></script>
-  <script src="assets/profile.js?v=202611132114"></script>
-  <script src="assets/facility.js?v=202611132114"></script>
-  <script src="assets/admin.js?v=202611132114"></script>
+  <script src="data/sites.js?v=202611132133"></script>
+  <script src="data/sample-emails.js?v=202611132133"></script>
+  <script src="assets/parser.js?v=202611132133"></script>
+  <script src="assets/store.js?v=202611132133"></script>
+  <script src="assets/common.js?v=202611132133"></script>
+  <script src="assets/editor.js?v=202611132133"></script>
+  <script src="assets/profile.js?v=202611132133"></script>
+  <script src="assets/facility.js?v=202611132133"></script>
+  <script src="assets/admin.js?v=202611132133"></script>
 </body>
 </html>

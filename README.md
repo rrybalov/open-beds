@@ -31,6 +31,7 @@ No build step. Serve the folder (`python3 -m http.server`) or open `index.html`.
 | `assets/parser.js` | Email → per-site counts. Runs in the browser and in Node. |
 | `assets/store.js` | The update log (demo adapter). The only file that changes for production. |
 | `assets/board.js` · `update.js` · `admin.js` | The three pages |
+| `assets/colab.css` | CoLab / ClientView look and feel: sidebar shell, cards, tabs, segmented controls, buttons, modal, toast — matches `rrybalov/colab-client-profile` |
 | `assets/editor.js` · `facility.js` · `profile.js` · `common.js` | Shared bed-count editor, new-facility form, facility-details form, helpers |
 | `tests/parser.test.js` | `node tests/parser.test.js` — parser checked against all 7 emails |
 | `docs/architecture.md` | Sources, email alias options, API, security |
