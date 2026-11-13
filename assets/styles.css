@@ -546,3 +546,37 @@ details.sim[open] summary::after { content: " ▾"; }
 .page-h.with-cta .btn { margin-top: 8px; }
 .site-edit-acts { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 16px; margin-top: 10px; }
 .grow-btn { font-size: 14px; font-weight: 500; }
+.findbar .sortbox { flex: none; }
+.findbar .sortbox .input { min-width: 230px; min-height: 44px; }
+.findbar { align-items: flex-end; }
+@media (max-width: 760px) { .findbar .sortbox { flex: 1 1 100%; } .findbar .sortbox .input { width: 100%; } }
+
+/* Facility details editor */
+.site-wrap { margin-bottom: 16px; }
+.site-wrap .site-edit { margin-bottom: 0; border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+.profile-edit { border: 1px solid var(--ash); border-top: 0; border-radius: 0 0 var(--radius) var(--radius); padding: 0 16px; background: var(--smoke); }
+.profile-edit > summary { cursor: pointer; min-height: 48px; display: flex; align-items: center; gap: 6px; font-weight: 700; color: var(--dark-blue); }
+.profile-edit[open] { padding-bottom: 14px; }
+.profile-edit .form-sub { margin: 16px 0 8px; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--dark-blue); }
+.pay-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0 12px; }
+.dialog .profile-edit { border: 0; padding: 0; background: none; }
+.dialog .profile-edit > summary { display: none; }
+@media (max-width: 760px) { .pay-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* Admin: per-facility change lines */
+.upd-filters { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
+.upd-filters .sel-in { min-width: 260px; }
+.ui-h { display: flex; align-items: baseline; gap: 10px; margin: 18px 0 8px; font-size: 16px; }
+.ui-h span { font-size: 13px; font-weight: 400; color: var(--stone); }
+.ui-org { font-size: 13px; color: var(--slate); }
+.ui-changes { margin: 6px 0 0; padding-left: 18px; font-size: 14px; line-height: 1.5; }
+.ui-how { margin: 6px 0 0; font-size: 13px; color: var(--slate); display: flex; align-items: center; gap: 6px; }
+.site-line { padding: 10px 16px; }
+.site-line.off .ui-changes { color: var(--stone); text-decoration: line-through; }
+@media (max-width: 760px) { .upd-filters .sel-in { min-width: 0; width: 100%; } }
+/* Find bar: Show as · Sort · Distance, one row with labels on top */
+.findbar { align-items: flex-start; gap: 12px 20px; }
+.findbar .modeseg legend.lbl { padding: 0; margin-bottom: 4px; }
+.findbar .sortbox .lbl, .findbar .mapsearch .lbl { margin-bottom: 4px; }
+.findbar .mapsearch { flex: 1 1 520px; margin: 0; padding: 0; border: 0; background: none; border-radius: 0; }
+.findbar .mapsearch .hint { margin-top: 6px; }

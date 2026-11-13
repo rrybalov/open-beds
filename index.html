@@ -10,7 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Crect width=%2716%27 height=%2716%27 rx=%273%27 fill=%27%23262673%27/%3E%3C/svg%3E">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
-  <link rel="stylesheet" href="assets/styles.css?v=202611132057">
+  <link rel="stylesheet" href="assets/styles.css?v=202611132114">
 </head>
 <body>
   <a class="skip" href="#results">Skip to results</a>
@@ -83,15 +83,6 @@
         <button type="button" role="tab" id="tab-grid" aria-controls="view-grid" aria-selected="false" tabindex="-1">All sites</button>
         <button type="button" role="tab" id="tab-updates" aria-controls="view-updates" aria-selected="false" tabindex="-1">Updates</button>
       </div>
-      <div class="sortbox" id="sortbox">
-        <label class="lbl" for="f-sort">Sort</label>
-        <select id="f-sort" class="input">
-          <option value="region">Closest region first</option>
-          <option value="count">Most open beds first</option>
-          <option value="recent">Most recent update first</option>
-          <option value="distance" disabled>Nearest to searched location</option>
-        </select>
-      </div>
     </div>
 
     <div id="results" tabindex="-1">
@@ -99,9 +90,18 @@
       <section id="view-find" role="tabpanel" aria-labelledby="tab-find">
         <div class="findbar">
           <fieldset class="seg-group modeseg">
-            <legend class="sr">Show results as</legend>
+            <legend class="lbl">Show as</legend>
             <div class="seg" id="f-mode"></div>
           </fieldset>
+          <div class="sortbox" id="sortbox">
+            <label class="lbl" for="f-sort">Sort</label>
+            <select id="f-sort" class="input">
+          <option value="region">Closest region first</option>
+          <option value="count">Most open beds first</option>
+          <option value="recent">Most recent update first</option>
+          <option value="distance" disabled>Nearest to searched location</option>
+            </select>
+          </div>
           <form class="mapsearch" id="map-form" role="search">
             <label class="lbl" for="map-q">Distance from an address or ZIP code</label>
             <div class="mapsearch-row">
@@ -130,12 +130,12 @@
     <p>Admissions numbers come from provider emails or the provider’s public pages; each card says which. Staff names and personal inboxes are not stored in this public repository.</p>
   </footer>
 
-  <script src="data/sites.js?v=202611132057"></script>
-  <script src="data/sample-emails.js?v=202611132057"></script>
-  <script src="assets/parser.js?v=202611132057"></script>
-  <script src="assets/store.js?v=202611132057"></script>
-  <script src="assets/common.js?v=202611132057"></script>
+  <script src="data/sites.js?v=202611132114"></script>
+  <script src="data/sample-emails.js?v=202611132114"></script>
+  <script src="assets/parser.js?v=202611132114"></script>
+  <script src="assets/store.js?v=202611132114"></script>
+  <script src="assets/common.js?v=202611132114"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
-  <script src="assets/board.js?v=202611132057"></script>
+  <script src="assets/board.js?v=202611132114"></script>
 </body>
 </html>

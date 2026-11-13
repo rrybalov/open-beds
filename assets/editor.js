@@ -143,7 +143,7 @@
     var site = S.siteById[sec.getAttribute("data-site")];
     var kept = {};
     Array.prototype.forEach.call(sec.querySelectorAll("input, select"), function (el) { kept[el.id] = el.value; });
-    var cur = S.current()[site.id];
+    var cur = S.current({ adjusted: true })[site.id];
     var tmp = document.createElement("div");
     tmp.innerHTML = siteBlock(site, cur, { prefix: sec.getAttribute("data-prefix"), mode: sec.getAttribute("data-mode"), full: true });
     var fresh = tmp.firstChild;

@@ -13,8 +13,8 @@ Counts reach the board three ways:
 | Page | For | What it does |
 |---|---|---|
 | [`index.html`](index.html) | Pathways intake staff | **Find a bed** (filter by bed type, sex, age, LOCA level, payment and location — a multi-select of provider sites; each card shows who the site takes), with a **List / Map** toggle (the same filters drive both; type an address or ZIP to sort by distance; select a pin to open that provider's availability in the side list). Each card shows the bed breakdown (type × men / women / total), when and where the count came from with **View source**, a **Mark a referral** action that takes one bed off the count for everyone, and **Contact admissions**: call, email intake, directions, website. **All sites** grid, **Updates** feed. |
-| [`update.html`](update.html) | Providers | Enter open beds per site. A personal link (`update.html?org=gaiser`) preselects the provider. Providers can also add a facility that isn't listed, or a whole new organization with its facilities — every bed type is offered, and DHS approves new ones before they appear. |
-| [`admin.html`](admin.html) | DHS staff | **Update a site's counts** and **Add a facility** at the top. **Updates**: every change from every source (email, provider form, DHS, referrals) in one list, with review, approve, correct, unpublish and undo. **Settings**. |
+| [`update.html`](update.html) | Providers | Enter open beds per site (blank keeps the last count). Each site can add bed types or split men/women, and open **Facility details** to change levels of care, who they take or won't, what's needed before admission, pregnancy / MOUD / medical / legal context, payment and contact. **Add a provider or facility** (top right) — new ones wait for DHS approval. |
+| [`admin.html`](admin.html) | DHS staff | **Update a facility** (counts or details) and **Add a facility** at the top. **Updates**: anything waiting for review first, then every change split out by facility (with its provider) and exactly what changed — e.g. “1 detox bed for men claimed through the dashboard (6 → 5)”, “1 residential bed for women removed (4 → 3) — changed manually by DHS”. Filter by source or facility; undo referrals, revert details changes. **Settings**. |
 
 ## Run it
 
@@ -31,7 +31,7 @@ No build step. Serve the folder (`python3 -m http.server`) or open `index.html`.
 | `assets/parser.js` | Email → per-site counts. Runs in the browser and in Node. |
 | `assets/store.js` | The update log (demo adapter). The only file that changes for production. |
 | `assets/board.js` · `update.js` · `admin.js` | The three pages |
-| `assets/editor.js` · `facility.js` · `common.js` | Shared bed-count editor, new-facility form, helpers |
+| `assets/editor.js` · `facility.js` · `profile.js` · `common.js` | Shared bed-count editor, new-facility form, facility-details form, helpers |
 | `tests/parser.test.js` | `node tests/parser.test.js` — parser checked against all 7 emails |
 | `docs/architecture.md` | Sources, email alias options, API, security |
 | `docs/email-aggregation.md` | The 7 emails side by side, with totals |

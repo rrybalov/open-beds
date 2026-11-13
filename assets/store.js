@@ -63,8 +63,12 @@
     }
 
     // Bed layouts providers have grown (a new bed type, or a men/women split) since data/sites.js.
-    var baseBeds = {};
-    SITES.sites.forEach(function (p) { baseBeds[p.id] = JSON.parse(JSON.stringify(p.beds || [])); });
+    var baseBeds = {}, baseProfile = {};
+    function clone(x) { return x === undefined ? undefined : JSON.parse(JSON.stringify(x)); }
+    SITES.sites.forEach(function (p) {
+      baseBeds[p.id] = clone(p.beds || []);
+      baseProfile[p.id] = { fit: clone(p.fit || {}), reach: clone(p.reach || {}) };
+    });
     function growLayout(st, entry) {
       var site = siteById[entry.siteId];
       if (!site) return;
@@ -98,9 +102,18 @@
         else siteById[p.id].pending = p.pending; // approval may have happened in another tab
       });
       Object.keys(s.layouts || {}).forEach(function (id) { if (siteById[id]) siteById[id].beds = s.layouts[id]; });
+      // Facility details edited by providers or DHS (levels of care, who they take, contact).
+      Object.keys(s.profiles || {}).forEach(function (id) {
+        var p = siteById[id], pr = s.profiles[id];
+        if (!p) return;
+        p.fit = clone(pr.fit); p.reach = clone(pr.reach); p.contact = (pr.reach && pr.reach.phone) || null;
+      });
     }
     function dropCustom() {
-      SITES.sites.forEach(function (p) { if (baseBeds[p.id]) p.beds = JSON.parse(JSON.stringify(baseBeds[p.id])); });
+      SITES.sites.forEach(function (p) {
+        if (baseBeds[p.id]) p.beds = clone(baseBeds[p.id]);
+        if (baseProfile[p.id]) { p.fit = clone(baseProfile[p.id].fit); p.reach = clone(baseProfile[p.id].reach); p.contact = p.reach.phone || null; }
+      });
       for (var i = SITES.sites.length - 1; i >= 0; i--) if (SITES.sites[i].custom) { delete siteById[SITES.sites[i].id]; SITES.sites.splice(i, 1); }
       for (var j = SITES.orgs.length - 1; j >= 0; j--) if (SITES.orgs[j].custom) { delete orgById[SITES.orgs[j].id]; SITES.orgs.splice(j, 1); }
     }
@@ -122,8 +135,19 @@
       return load().reports.slice().sort(function (a, b) { return new Date(b.receivedAt) - new Date(a.receivedAt); });
     }
 
-    // Latest published entry per site.
-    function current() {
+    // Latest published entry per site. With {adjusted: true}, referrals marked since are taken off,
+    // so forms start from what the board actually shows.
+    function current(opts) {
+      if (opts && opts.adjusted) {
+        var base = current(), refs = reports().filter(function (r) { return r.source === "referral" && r.status === "published"; });
+        Object.keys(base).forEach(function (id) {
+          var c = base[id], mine = refs.filter(function (r) { return r.referral.siteId === id && new Date(r.receivedAt) > new Date(c.report.receivedAt); });
+          if (!mine.length) return;
+          var ap = applyReferrals(c.entry.counts, c.entry.shared, mine);
+          base[id] = { report: c.report, entry: Object.assign({}, c.entry, { counts: ap.counts, shared: ap.shared }) };
+        });
+        return base;
+      }
       var out = {};
       reports().forEach(function (r) {
         if (r.status !== "published") return;
@@ -190,15 +214,60 @@
       return r;
     }
 
+    // Form and DHS updates only send what was typed: blank means "no change", so start from the site's
+    // current entry and lay the new values over it.
+    function mergeEntry(prev, e) {
+      if (!prev) return e;
+      var out = clone(prev);
+      out.siteId = e.siteId;
+      out.counts = out.counts || {};
+      Object.keys(e.counts || {}).forEach(function (t) { out.counts[t] = Object.assign({}, out.counts[t] || {}, e.counts[t]); });
+      if (e.shared) out.shared = e.shared;
+      var q = (out.qualitative || []).filter(function (x) { return x.types.indexOf("unknown") < 0; });
+      if (e.counts && e.counts.outpatient) q = q.filter(function (x) { return x.types.indexOf("outpatient") < 0; });
+      (e.qualitative || []).forEach(function (x) {
+        if (x.types.indexOf("outpatient") > -1 && out.counts.outpatient) delete out.counts.outpatient;
+        q = q.filter(function (y) { return y.types.join() !== x.types.join(); }).concat([x]);
+      });
+      out.qualitative = q;
+      out.notes = e.notes || [];
+      out.flags = [];
+      return out;
+    }
+    function merged(entries) {
+      var cur = current({ adjusted: true });
+      return entries.map(function (e) { return mergeEntry(cur[e.siteId] && cur[e.siteId].entry, e); });
+    }
+
     function submitForm(input) {
+      input.entries = merged(input.entries);
       var r = { id: uid(), source: "form", status: "published", receivedAt: nowIso(), orgId: input.orgId, by: input.by || "Provider form", entries: input.entries, note: input.note };
       mutate(function (st) { st.reports.push(r); input.entries.forEach(function (e) { growLayout(st, e); }); hydrate(st); });
       return r;
     }
 
     function adminUpdate(input) {
+      input.entries = merged(input.entries);
       var r = { id: uid(), source: "admin", status: "published", receivedAt: nowIso(), orgId: input.orgId, by: "DHS admin" + (input.by ? ": " + input.by : ""), reason: input.reason, entries: input.entries };
       mutate(function (st) { st.reports.push(r); input.entries.forEach(function (e) { growLayout(st, e); }); hydrate(st); });
+      return r;
+    }
+
+    // Facility details change: applied at once, logged with before/after so DHS can revert.
+    function updateProfile(input) {
+      var site = siteById[input.siteId], r = null;
+      if (!site) return null;
+      mutate(function (st) {
+        st.profiles = st.profiles || {};
+        var before = { fit: clone(site.fit || {}), reach: clone(site.reach || {}) };
+        var after = { fit: clone(input.fit), reach: clone(input.reach) };
+        st.profiles[site.id] = after;
+        if (site.custom) (st.customSites || []).forEach(function (c) { if (c.id === site.id) { c.fit = clone(after.fit); c.reach = clone(after.reach); c.contact = after.reach.phone || null; } });
+        r = { id: uid(), source: input.source || "admin", status: "published", receivedAt: nowIso(), orgId: site.org,
+          by: input.by, reason: input.reason, profile: { siteId: site.id, before: before, after: after, changes: input.changes || [] }, entries: [] };
+        st.reports.push(r);
+        hydrate(st);
+      });
       return r;
     }
 
@@ -242,18 +311,21 @@
           r.decidedBy = opts.by || "DHS admin";
           if (opts.entries) r.entries = opts.entries;
           if (opts.orgId) r.orgId = opts.orgId;
+          // Reverting a profile change restores what it replaced.
+          if (r.profile && status === "rejected") { st.profiles = st.profiles || {}; st.profiles[r.profile.siteId] = clone(r.profile.before); }
           // Approving a provider's new facility puts it on the board.
           if (r.newSites) (st.customSites || []).forEach(function (p) {
             if (r.newSites.indexOf(p.id) > -1) { p.pending = status !== "published"; if (siteById[p.id]) siteById[p.id].pending = p.pending; }
           });
         });
+        hydrate(st);
       });
     }
 
     return {
       sites: SITES, siteById: siteById, orgById: orgById,
       reports: reports, current: current, boardSites: boardSites,
-      receiveEmail: receiveEmail, submitForm: submitForm, adminUpdate: adminUpdate, refer: refer, addSite: addSite, addSites: addSites,
+      receiveEmail: receiveEmail, submitForm: submitForm, adminUpdate: adminUpdate, refer: refer, addSite: addSite, addSites: addSites, updateProfile: updateProfile,
       undoReferral: function (id, opts) { decide(id, "undone", opts); },
       publish: function (id, opts) { decide(id, "published", opts); },
       reject: function (id, opts) { decide(id, "rejected", opts); },

@@ -1,7 +1,7 @@
 /* Open Beds — provider update form: counts for listed sites, plus new providers and facilities (held for DHS review). */
 (function () {
   "use strict";
-  var S = window.OpenBedsStore, OB = window.OB, ED = window.OpenBedsEditor, FAC = window.OpenBedsFacility, esc = OB.esc;
+  var S = window.OpenBedsStore, OB = window.OB, ED = window.OpenBedsEditor, FAC = window.OpenBedsFacility, PR = window.OpenBedsProfile, esc = OB.esc;
   function $(id) { return document.getElementById(id); }
   var PREFIX = "pf", NEW = "__new";
   var facs = [], facSeq = 0; // prefixes of the "new facility" blocks on the page
@@ -31,11 +31,11 @@
     if (!orgId) { $("sites").innerHTML = ""; $("org-hint").hidden = false; $("tmpl").textContent = template([]); return; }
     $("org-hint").hidden = true;
     if (isNew) { $("tmpl").textContent = template([]); return; }
-    var cur = S.current();
+    var cur = S.current({ adjusted: true });
     var sites = orgSites(orgId);
     $("sites").innerHTML = sites.map(function (s) {
       var c = cur[s.id];
-      return ED.siteBlock(s, c, { prefix: PREFIX, mode: "provider" });
+      return '<div class="site-wrap">' + ED.siteBlock(s, c, { prefix: PREFIX, mode: "provider" }) + PR.fields(s, "pp-" + s.id) + "</div>";
     }).join("");
     $("tmpl").textContent = template(sites);
   }
@@ -92,12 +92,19 @@
       fieldErrors += r.errors.length;
       if (r.entry) entries.push(r.entry);
     });
+    var profiles = [], profileErrors = [];
+    if (orgId && !isNew) orgSites(orgId).forEach(function (s) {
+      var pr = PR.read(s, "pp-" + s.id);
+      profileErrors = profileErrors.concat(pr.errors);
+      if (pr.changed) profiles.push({ site: s, pr: pr });
+    });
+    errs = errs.concat(profileErrors);
     var newFacs = facs.map(function (p) { return FAC.read(p); });
     var facErrors = newFacs.filter(function (f) { return f.errors.length; }).length;
     if (fieldErrors) errs.push("Fix the highlighted counts — use a number or NA.");
     if (facErrors) errs.push("Check the new facilit" + (facErrors === 1 ? "y" : "ies") + " — see the notes in red.");
     if (isNew && !facs.length) errs.push("Add at least one facility.");
-    if (orgId && !isNew && !fieldErrors && !facErrors && !entries.length && !newFacs.length) errs.push("Enter counts for at least one site.");
+    if (orgId && !isNew && !fieldErrors && !facErrors && !entries.length && !newFacs.length && !profiles.length) errs.push("Enter counts for at least one site, or change its details.");
     if (!$("confirm").checked) errs.push("Confirm the counts are current.");
     if (errs.length) {
       $("form-err").textContent = errs.join(" ");
@@ -111,13 +118,16 @@
     var orgName = isNew ? prov.org.short : S.orgById[orgId].short;
     var by = orgName + (role ? " — " + role : "");
     if (entries.length) S.submitForm({ orgId: orgId, entries: entries, by: by });
+    profiles.forEach(function (x) { S.updateProfile({ siteId: x.site.id, fit: x.pr.fit, reach: x.pr.reach, changes: x.pr.changes, by: by, source: "form" }); });
     var names = entries.map(function (x) { return S.siteById[x.siteId].name; });
+    var profNames = profiles.map(function (x) { return x.site.name; });
 
     var finish = function (added) {
       var parts = [];
       if (names.length) parts.push("<p>" + esc(OB.plural(names.length, "site")) + " updated on the board at " + esc(OB.timeOf(new Date())) + ": " + esc(names.join(", ")) + ".</p>");
+      if (profNames.length) parts.push("<p>Facility details updated for " + esc(profNames.join(", ")) + ".</p>");
       if (added.length) parts.push("<p>" + (isNew ? "Your organization and " : "") + esc(OB.plural(added.length, "new facility", "new facilities")) + " (" + esc(added.join(", ")) + ") went to DHS to check. They’ll show on the board, with the counts you entered, once approved.</p>");
-      $("done").innerHTML = "<h2>Thanks — " + (names.length ? "the bed board is updated." : "we have it.") + "</h2>" + parts.join("") +
+      $("done").innerHTML = "<h2>Thanks — " + (names.length || profNames.length ? "the bed board is updated." : "we have it.") + "</h2>" + parts.join("") +
         '<div class="btnrow"><a class="btn primary" href="index.html">See the bed board</a><button type="button" class="btn" id="again">Update again</button></div>';
       $("done").hidden = false;
       $("upd").hidden = true;

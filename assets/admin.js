@@ -1,9 +1,9 @@
 /* Open Beds — admin: every update in one list (email, provider form, DHS, referrals), plus settings. */
 (function () {
   "use strict";
-  var S = window.OpenBedsStore, OB = window.OB, ED = window.OpenBedsEditor, FAC = window.OpenBedsFacility, esc = OB.esc;
+  var S = window.OpenBedsStore, OB = window.OB, ED = window.OpenBedsEditor, FAC = window.OpenBedsFacility, PR = window.OpenBedsProfile, esc = OB.esc;
   function $(id) { return document.getElementById(id); }
-  var ui = { tab: "updates", filter: "all" };
+  var ui = { tab: "updates", filter: "all", site: "" };
   var lastFocus = null;
 
   function siteName(id) { return S.siteById[id] ? S.siteById[id].name : id; }
@@ -11,7 +11,7 @@
   function liveSites() { return S.sites.sites.filter(function (s) { return !s.pending; }); }
 
   // ---------- updates ----------
-  var FILTERS = [["all", "All"], ["review", "Needs review"], ["email", "Email"], ["form", "Provider form"], ["admin", "DHS"], ["referral", "Referrals"]];
+  var FILTERS = [["all", "All"], ["review", "Needs review"], ["email", "Email"], ["form", "Provider form"], ["admin", "DHS"], ["referral", "Referrals"], ["profile", "Facility details"]];
   function renderFilter() {
     $("upd-filter").innerHTML = FILTERS.map(function (f) {
       var id = "uf-" + f[0];
@@ -39,7 +39,7 @@
   }
   function statusText(r) {
     if (r.status === "review") return r.newSites ? "Waiting for approval" : "Needs review";
-    if (r.status === "rejected") return r.source === "email" ? "Rejected" : "Removed";
+    if (r.status === "rejected") return r.source === "email" ? "Rejected" : r.profile ? "Reverted" : "Removed";
     if (r.status === "undone") return "Undone";
     return "";
   }
@@ -75,15 +75,121 @@
       '<div class="ui-act">' + view + acts.join("") + "</div></article>";
   }
 
+  // ---------- per-facility change log ----------
+  // Every update split into one line per facility, with what changed since that facility's last count.
+  var SEXW = { male: " for men", female: " for women", any: "" };
+  function bedWord(t, sx, n) {
+    var name = t === "shared" ? "detox-or-rehab" : OB.TYPE_LABEL[t] ? OB.TYPE_LABEL[t].toLowerCase() : t;
+    return (n === undefined ? "" : n + " ") + name + " bed" + (n === 1 || n === undefined ? "" : "s") + SEXW[sx || "any"];
+  }
+  // Flatten an entry into comparable cells.
+  function cells(e) {
+    var out = {};
+    if (!e) return out;
+    Object.keys(e.counts || {}).forEach(function (t) {
+      if (t === "outpatient") { if (e.counts.outpatient.any === 0) out["op"] = "no"; return; }
+      Object.keys(e.counts[t]).forEach(function (sx) { out[t + "|" + sx] = e.counts[t][sx]; });
+    });
+    if (e.shared) out["shared|any"] = e.shared.open;
+    (e.qualitative || []).forEach(function (q) {
+      if (q.types.indexOf("outpatient") > -1) out["op"] = "yes";
+      else out["q|" + q.types.join(",")] = q.label;
+    });
+    return out;
+  }
+  function changeLines(prev, cur) {
+    if (!prev) return ["First count on the board: " + OB.entrySummary(cur)];
+    var a = cells(prev), b = cells(cur), keys = [], lines = [];
+    Object.keys(a).concat(Object.keys(b)).forEach(function (k) { if (keys.indexOf(k) < 0) keys.push(k); });
+    var order = ["detox", "shared", "residential", "php", "op", "q"];
+    keys.sort(function (x, y) { return order.indexOf(x.split("|")[0]) - order.indexOf(y.split("|")[0]); });
+    keys.forEach(function (k) {
+      var va = a[k], vb = b[k], t = k.split("|")[0], sx = k.split("|")[1];
+      if (va === vb) return;
+      if (k === "op") { lines.push(vb === "yes" ? "Outpatient: now accepting new clients" : vb === "no" ? "Outpatient: no longer accepting" : "Outpatient: not in this update"); return; }
+      if (t === "q") { lines.push(vb ? "Says “" + vb + "” (no count)" : "No longer says “" + va + "”"); return; }
+      var label = bedWord(t, sx);
+      if (typeof va === "number" && typeof vb === "number") {
+        var d = vb - va;
+        lines.push(Math.abs(d) + " " + bedWord(t, sx, Math.abs(d)).replace(/^\d+ /, "") + " " + (d < 0 ? "removed" : "added") + " (" + va + " → " + vb + ")");
+      } else if (vb === "na") lines.push(label.charAt(0).toUpperCase() + label.slice(1) + " marked N/A");
+      else if (va === undefined) lines.push(label.charAt(0).toUpperCase() + label.slice(1) + ": " + vb + " open (new in this update)");
+      else if (vb === undefined) lines.push(label.charAt(0).toUpperCase() + label.slice(1) + ": not in this update (was " + (va === "na" ? "N/A" : va) + ")");
+      else lines.push(label.charAt(0).toUpperCase() + label.slice(1) + ": " + (va === "na" ? "N/A" : va) + " → " + vb);
+    });
+    return lines.length ? lines : ["No change — same counts confirmed"];
+  }
+  function howLine(r) {
+    var who = r.by && r.by.indexOf(": ") > -1 ? r.by.split(": ")[1] : "";
+    if (r.profile) return "Facility details changed " + (r.source === "admin" ? "by DHS" + (who ? " (" + who + ")" : "") : "on the provider form" + (r.by ? " — " + r.by : "")) + (r.reason ? " — “" + r.reason + "”" : "");
+    if (r.source === "referral") return "Claimed through the dashboard" + (who ? " by " + who : "");
+    if (r.source === "admin") return "Changed manually by DHS" + (who ? " (" + who + ")" : "") + (r.reason ? " — “" + r.reason + "”" : "");
+    if (r.source === "form") return "Provider form" + (r.by ? " — " + r.by : "");
+    return "Email from " + orgShort(r.orgId);
+  }
+  function siteItems() {
+    var chron = S.reports().slice().reverse(), lastPub = {}, items = [];
+    chron.forEach(function (r) {
+      if (r.status === "review") return; // shown at the top, as a whole
+      var off = r.status === "rejected" || r.status === "undone";
+      if (r.source === "referral") {
+        var rf = r.referral, before = lastPub[rf.siteId], was = null;
+        // Take the claimed bed off the running count, so the next update is compared with what the board showed.
+        if (before && !off) {
+          var nx = JSON.parse(JSON.stringify(before));
+          if (rf.type === "shared" && nx.shared) { was = nx.shared.open; nx.shared.open = Math.max(0, was - 1); }
+          else if (nx.counts && nx.counts[rf.type] && typeof nx.counts[rf.type][rf.sex] === "number") { was = nx.counts[rf.type][rf.sex]; nx.counts[rf.type][rf.sex] = Math.max(0, was - 1); }
+          lastPub[rf.siteId] = nx;
+        }
+        items.push({ r: r, siteId: rf.siteId, kind: "referral", lines: ["1 " + bedWord(rf.type, rf.sex, 1).replace(/^1 /, "") + " claimed through the dashboard" + (was !== null ? " (" + was + " → " + Math.max(0, was - 1) + ")" : "")] });
+        return;
+      }
+      if (r.profile) { items.push({ r: r, siteId: r.profile.siteId, kind: "profile", lines: r.profile.changes.length ? r.profile.changes : ["Facility details saved, no changes"] }); return; }
+      (r.newSites || []).forEach(function (id) {
+        if (!r.entries.some(function (e) { return e.siteId === id; })) items.push({ r: r, siteId: id, kind: "new", lines: ["Added as a new facility — no counts yet"] });
+      });
+      r.entries.forEach(function (e) {
+        var isNew = (r.newSites || []).indexOf(e.siteId) > -1;
+        var lines = isNew ? ["Added as a new facility: " + OB.entrySummary(e)] : e.siteId ? changeLines(lastPub[e.siteId], e) : ["Counts not matched to a site: " + OB.entrySummary(e)];
+        items.push({ r: r, siteId: e.siteId, kind: "counts", lines: lines });
+        if (e.siteId && !off) lastPub[e.siteId] = e;
+      });
+    });
+    return items.reverse();
+  }
+  function siteItem(it) {
+    var r = it.r, f = OB.when(r.receivedAt), site = it.siteId ? S.siteById[it.siteId] : null, st = statusText(r);
+    var acts = ['<button type="button" class="linkbtn" data-report="' + esc(r.id) + '"' + (it.siteId ? ' data-site="' + esc(it.siteId) + '"' : "") + ' aria-haspopup="dialog">' + (r.source === "email" ? "View email" : "View details") + "</button>"];
+    if (r.status === "published") {
+      if (it.kind === "referral") acts.push('<button type="button" class="linkbtn" data-act="undo" data-id="' + r.id + '">Undo</button>');
+      else if (it.kind === "profile") acts.push('<button type="button" class="linkbtn danger" data-act="reject" data-id="' + r.id + '">Revert</button>');
+      if (site && !site.pending) acts.push('<button type="button" class="linkbtn" data-fix="' + esc(site.id) + '">Correct counts</button>');
+    }
+    return '<article class="ui-item site-line' + (st ? " off" : "") + '">' +
+      '<div class="ui-main"><p class="ui-top"><b>' + esc(site ? site.name : "Unmatched counts") + "</b>" +
+      (site ? '<span class="ui-org">run by ' + esc(orgShort(site.org)) + "</span>" : "") +
+      '<span class="ui-time">' + esc(f.label) + "</span>" + (st ? '<span class="ui-status st-' + r.status + '">' + esc(st) + "</span>" : "") + "</p>" +
+      '<ul class="ui-changes">' + it.lines.map(function (l) { return "<li>" + esc(l) + "</li>"; }).join("") + "</ul>" +
+      '<p class="ui-how"><span class="upd-src">' + (OB.ICON[r.source] || "") + "</span>" + esc(howLine(r)) + "</p></div>" +
+      '<div class="ui-act">' + acts.join("") + "</div></article>";
+  }
+
   function renderUpdates() {
     var all = S.reports();
-    var list = all.filter(function (r) {
+    var waiting = all.filter(function (r) { return r.status === "review"; })
+      .filter(function (r) { return ui.filter === "all" || ui.filter === "review" || r.source === ui.filter; })
+      .sort(function (a, b) { return new Date(b.receivedAt) - new Date(a.receivedAt); });
+    var lines = ui.filter === "review" ? [] : siteItems().filter(function (it) {
       if (ui.filter === "all") return true;
-      if (ui.filter === "review") return r.status === "review";
-      return r.source === ui.filter;
+      if (ui.filter === "profile") return it.kind === "profile";
+      return it.r.source === ui.filter && it.kind !== "profile";
     });
-    list.sort(function (a, b) { return (a.status === "review" ? 0 : 1) - (b.status === "review" ? 0 : 1) || new Date(b.receivedAt) - new Date(a.receivedAt); });
-    $("upd-list").innerHTML = list.length ? list.slice(0, 80).map(item).join("") : '<div class="empty">Nothing here.</div>';
+    if (ui.site) lines = lines.filter(function (it) { return it.siteId === ui.site; });
+    var html = "";
+    if (waiting.length) html += '<h2 class="ui-h">Waiting for you <span>' + waiting.length + "</span></h2>" + waiting.map(item).join("");
+    if (ui.filter !== "review") html += '<h2 class="ui-h">Changes by facility <span>newest first</span></h2>' + (lines.length ? lines.slice(0, 150).map(siteItem).join("") : '<div class="empty">Nothing here.</div>');
+    else if (!waiting.length) html += '<div class="empty">Nothing waiting for review.</div>';
+    $("upd-list").innerHTML = html;
   }
 
   function onUpdateClick(e) {
@@ -93,7 +199,7 @@
     var r = S.reports().filter(function (x) { return x.id === id; })[0];
     var act = b.getAttribute("data-act");
     if (act === "undo") { S.undoReferral(id, { by: "DHS admin" }); say("Referral undone — the bed is back on the board."); return; }
-    if (act === "reject") { S.reject(id); say(r.status === "published" ? "Removed from the board." : "Rejected."); return; }
+    if (act === "reject") { S.reject(id); say(r.profile ? "Reverted — the facility’s details are back to what they were." : r.status === "published" ? "Removed from the board." : "Rejected."); return; }
     var entries = assigned(r);
     if (!entries) { say("Assign every count to a site first."); var sel = document.querySelector('[data-assign="' + id + '"]'); if (sel) sel.focus(); return; }
     if (act === "publish") { S.publish(id, { entries: entries }); say(r.newSites ? "Approved — the new facilit" + (r.newSites.length === 1 ? "y is" : "ies are") + " on the board." : "Published. The bed board is updated."); return; }
@@ -149,7 +255,7 @@
 
   function openSiteUpdate(siteId) {
     var site = S.siteById[siteId];
-    var cur = S.current()[siteId];
+    var cur = S.current({ adjusted: true })[siteId];
     var html = '<form novalidate><h2 id="dlg-h">Update ' + esc(site.name) + '</h2><p class="hint">Use when a provider calls in, or to correct a count. The board shows this as a DHS update.</p>' +
       ED.siteBlock(site, cur, { prefix: "ad", mode: "admin" }) +
       '<div class="row2"><div class="field"><label class="lbl" for="ad-by">Your name</label><input id="ad-by" class="input wide" type="text" autocomplete="name"></div>' +
@@ -220,6 +326,23 @@
     $("nf-org").addEventListener("change", function () { $("nf-neworg").hidden = $("nf-org").value !== "__new"; });
   }
 
+  function openProfile(siteId) {
+    var site = S.siteById[siteId];
+    var html = '<form novalidate><h2 id="dlg-h">' + esc(site.name) + ' — facility details</h2><p class="hint">Levels of care, who they take, payment and contact. Saved changes show on the board and in Updates.</p>' +
+      PR.fields(site, "ap", { open: true }) +
+      '<div class="row2"><div class="field"><label class="lbl" for="ap-by">Your name</label><input id="ap-by" class="input wide" type="text" autocomplete="name"></div>' +
+      '<div class="field"><label class="lbl" for="ap-reason">Why <span class="help">(optional)</span></label><input id="ap-reason" class="input wide" type="text" placeholder="e.g. Confirmed with admissions"></div></div>' +
+      '<div class="btnrow"><button type="submit" class="btn primary">Save details</button><button type="button" class="btn" data-cancel>Cancel</button></div></form>';
+    openDialog(html, function () {
+      var pr = PR.read(site, "ap");
+      if (pr.errors.length) return;
+      if (!pr.changed) { closeDialog(); say("No changes to save."); return; }
+      S.updateProfile({ siteId: site.id, fit: pr.fit, reach: pr.reach, changes: pr.changes, by: "DHS admin" + ($("ap-by").value.trim() ? ": " + $("ap-by").value.trim() : ""), reason: $("ap-reason").value.trim(), source: "admin" });
+      closeDialog();
+      say(site.name + ": " + OB.plural(pr.changes.length, "detail") + " updated.");
+    });
+  }
+
   function renderSitePicker() {
     var cur = S.current(), keep = $("pick-site").value;
     $("pick-site").innerHTML = '<option value="">Choose a site…</option>' + liveSites().map(function (s) {
@@ -227,6 +350,9 @@
       return '<option value="' + s.id + '">' + esc(s.name + " — " + S.orgById[s.org].short + (stale ? " (no update in 24 h)" : "")) + "</option>";
     }).join("");
     $("pick-site").value = keep;
+    var ks = $("upd-site").value;
+    $("upd-site").innerHTML = '<option value="">All facilities</option>' + liveSites().map(function (s) { return '<option value="' + s.id + '">' + esc(s.name + " — " + S.orgById[s.org].short) + "</option>"; }).join("");
+    $("upd-site").value = ks;
   }
 
   // ---------- settings ----------
@@ -273,6 +399,12 @@
   });
   $("upd-filter").addEventListener("change", function (e) { ui.filter = e.target.value; renderUpdates(); });
   $("upd-list").addEventListener("click", onUpdateClick);
+  $("upd-list").addEventListener("click", function (e) { var b = e.target.closest("[data-fix]"); if (b) openSiteUpdate(b.getAttribute("data-fix")); });
+  $("upd-site").addEventListener("change", function (e) { ui.site = e.target.value; renderUpdates(); });
+  $("pick-details").addEventListener("click", function () {
+    if (!$("pick-site").value) { say("Choose a site first."); $("pick-site").focus(); return; }
+    openProfile($("pick-site").value);
+  });
   $("add-site").addEventListener("click", openAddFacility);
   $("pick-go").addEventListener("click", function () {
     if (!$("pick-site").value) { say("Choose a site to update."); $("pick-site").focus(); return; }

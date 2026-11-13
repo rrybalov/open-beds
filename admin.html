@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Crect width=%2716%27 height=%2716%27 rx=%273%27 fill=%27%23262673%27/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="assets/styles.css?v=202611132057">
+  <link rel="stylesheet" href="assets/styles.css?v=202611132114">
 </head>
 <body>
   <a class="skip" href="#admin-main">Skip to content</a>
@@ -36,8 +36,8 @@
 
     <div class="admin-actions">
       <div class="pick">
-        <label class="lbl" for="pick-site">Update a site’s counts</label>
-        <div class="pick-row"><select id="pick-site" class="sel-in"></select><button type="button" class="btn" id="pick-go">Update counts</button></div>
+        <label class="lbl" for="pick-site">Update a facility</label>
+        <div class="pick-row"><select id="pick-site" class="sel-in"></select><button type="button" class="btn" id="pick-go">Update counts</button><button type="button" class="btn" id="pick-details">Edit details</button></div>
       </div>
       <button type="button" class="btn primary" id="add-site">Add a facility</button>
     </div>
@@ -51,8 +51,11 @@
     <p class="status" id="a-status" aria-live="polite"></p>
 
     <section id="p-updates" role="tabpanel" aria-labelledby="t-updates">
-      <p class="hint">Every change to the board — provider emails, the provider form, DHS edits and referrals — newest first. Anything waiting for you is at the top.</p>
-      <div class="seg" id="upd-filter" role="radiogroup" aria-label="Show updates"></div>
+      <p class="hint">Every change to the board, one line per facility, with exactly what changed. Anything waiting for you is at the top.</p>
+      <div class="upd-filters">
+        <div class="seg" id="upd-filter" role="radiogroup" aria-label="Show updates"></div>
+        <div class="field" style="margin:0"><label class="sr" for="upd-site">Facility</label><select id="upd-site" class="sel-in"></select></div>
+      </div>
       <div class="admin-grid" style="margin-top:12px">
         <div class="main-col"><div id="upd-list"></div></div>
         <aside class="side-col">
@@ -95,13 +98,14 @@
     <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dlg-h" id="dlg"></div>
   </div>
 
-  <script src="data/sites.js?v=202611132057"></script>
-  <script src="data/sample-emails.js?v=202611132057"></script>
-  <script src="assets/parser.js?v=202611132057"></script>
-  <script src="assets/store.js?v=202611132057"></script>
-  <script src="assets/common.js?v=202611132057"></script>
-  <script src="assets/editor.js?v=202611132057"></script>
-  <script src="assets/facility.js?v=202611132057"></script>
-  <script src="assets/admin.js?v=202611132057"></script>
+  <script src="data/sites.js?v=202611132114"></script>
+  <script src="data/sample-emails.js?v=202611132114"></script>
+  <script src="assets/parser.js?v=202611132114"></script>
+  <script src="assets/store.js?v=202611132114"></script>
+  <script src="assets/common.js?v=202611132114"></script>
+  <script src="assets/editor.js?v=202611132114"></script>
+  <script src="assets/profile.js?v=202611132114"></script>
+  <script src="assets/facility.js?v=202611132114"></script>
+  <script src="assets/admin.js?v=202611132114"></script>
 </body>
 </html>
