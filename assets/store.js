@@ -313,6 +313,11 @@
           if (opts.orgId) r.orgId = opts.orgId;
           // Reverting a profile change restores what it replaced.
           if (r.profile && status === "rejected") { st.profiles = st.profiles || {}; st.profiles[r.profile.siteId] = clone(r.profile.before); }
+          // Undoing that revert puts the change back.
+          if (r.profile && status === "published") { st.profiles = st.profiles || {}; st.profiles[r.profile.siteId] = clone(r.profile.after); }
+          if (r.profile && r.profile.siteId) (st.customSites || []).forEach(function (c) {
+            if (c.id === r.profile.siteId) { var pr = st.profiles[c.id]; c.fit = clone(pr.fit); c.reach = clone(pr.reach); c.contact = pr.reach.phone || null; }
+          });
           // Approving a provider's new facility puts it on the board.
           if (r.newSites) (st.customSites || []).forEach(function (p) {
             if (r.newSites.indexOf(p.id) > -1) { p.pending = status !== "published"; if (siteById[p.id]) siteById[p.id].pending = p.pending; }
@@ -329,6 +334,8 @@
       undoReferral: function (id, opts) { decide(id, "undone", opts); },
       publish: function (id, opts) { decide(id, "published", opts); },
       reject: function (id, opts) { decide(id, "rejected", opts); },
+      // Put a report back the way it was (the admin page's Undo).
+      restore: function (id, status, opts) { decide(id, status, opts); },
       settings: function () { return load().settings; },
       setSetting: function (k, v) { mutate(function (st) { st.settings[k] = v; }); },
       reset: function () { dropCustom(); var s = seed(); write(s); },

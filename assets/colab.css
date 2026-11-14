@@ -331,3 +331,126 @@ details.sim summary { justify-content: space-between; }
 details.sim summary::after { content: ""; width: 8px; height: 8px; border-right: 2px solid var(--slate); border-bottom: 2px solid var(--slate); transform: rotate(-45deg); margin-right: 4px; }
 details.sim[open] summary::after { content: ""; transform: rotate(45deg); }
 .grid .site-name .grid-lv { color: var(--slate); font-weight: 400; }
+
+/* ===== Review changes (Nov 13 night) ===== */
+/* 1, 10: compact filter bar on one aligned row; the rest behind More filters */
+.filters { display: block; padding: 18px 22px; }
+.filters-toggle { display: none; }
+.filters-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px 24px; }
+.filters-row .filter-col .selbtn { min-width: 220px; }
+.more-btn .chev { width: 8px; height: 8px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg); margin: -3px 0 0 4px; }
+.more-btn[aria-expanded="true"] .chev { transform: rotate(-135deg); margin-top: 3px; }
+.more-count, .filters-count { font-weight: 700; }
+.more-filters { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px 24px; align-items: end; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--hairline); }
+.more-filters .seg-group { min-width: 0; }
+.more-filters .input { width: 100%; }
+.more-filters .checks { gap: 4px; }
+.seg-n { margin-left: 6px; font-weight: 400; opacity: .85; font-variant-numeric: tabular-nums; }
+.seg input:checked + label .seg-n { opacity: 1; }
+/* 4: chips + Clear all */
+.chips { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--hairline); }
+.chips-h { font-size: 13px; font-weight: 700; color: var(--black); margin-right: 4px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 4px 8px 4px 12px; border: 1.5px solid var(--dark-blue); border-radius: 999px; background: var(--white); color: var(--dark-blue); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.chip:hover { background: var(--smoke); }
+.chips .linkbtn { margin-left: 4px; }
+/* 1: dismissible notice; stale banner */
+.notice { position: relative; padding-right: 44px; }
+.notice-x { position: absolute; top: 50%; right: 8px; transform: translateY(-50%); display: grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: var(--radius); background: transparent; color: var(--slate); cursor: pointer; }
+.notice-x:hover { background: var(--smoke); }
+.notice.warn { padding-right: 14px; border-color: #C99A4B; background: #FFF9EE; }
+.notice.warn svg { stroke: #6E4A0E; }
+.notice.warn p { color: #6E4A0E; }
+/* 2: the two count notes that aren't bed types */
+.also { margin: 0; font-size: 13px; color: var(--slate); }
+.also:empty { display: none; }
+/* 8: live changes */
+.live-note { margin: 0; font-size: 13px; font-weight: 600; color: var(--dark-blue); }
+.live-note:empty { display: none; }
+@keyframes ob-flash { 0% { box-shadow: 0 0 0 3px var(--light-blue); } 70% { box-shadow: 0 0 0 3px var(--light-blue); } 100% { box-shadow: 0 0 0 0 transparent; } }
+.just-changed { animation: ob-flash 3.5s ease-out 1; }
+@media (prefers-reduced-motion: reduce) { .just-changed { animation: none; box-shadow: 0 0 0 2px var(--light-blue); } }
+/* 5: wide screens put "Who they take" beside the bed table */
+@media (min-width: 1280px) {
+  .card { grid-template-columns: 112px minmax(0, 1.25fr) minmax(280px, 1fr); }
+  .card > .side { grid-column: 3; grid-row: 1; }
+  .card > .bedwrap { grid-column: 2; grid-row: 2; }
+  .card > .fit { grid-column: 3; grid-row: 2; border-top: 0; padding-top: 0; padding-left: 18px; border-left: 1px solid var(--hairline); }
+  .card > .contact { grid-row: 3; }
+}
+/* 5: contact sources on demand; compact density */
+.note-btn { margin-top: 6px; font-size: 12px; font-weight: 600; }
+.contact-note { margin-top: 4px; }
+.density { display: flex; flex-direction: column; flex: none; }
+.density .check { min-height: 40px; display: flex; align-items: center; }
+.compact .card { padding: 10px 14px; gap: 6px 16px; }
+.compact .card > .fit, .compact .bed-notes, .compact .contact-h, .compact .note-btn, .compact .contact-note, .compact .site .meta { display: none !important; }
+.compact .beds th, .compact .beds td { padding-top: 4px; padding-bottom: 4px; }
+.compact .count { min-height: 56px; }
+.compact .contact { padding-top: 8px; }
+/* 9: one type scale (12 / 13 / 14 / 16 / 20 / 26) and one style per heading level */
+.side-note, .count span, .contact-note, .tile .s, .srcdlg-kind { font-size: 12px; }
+.fit-h, .contact-h, .srcdlg-sub, .form-sub, .addsite .form-sub, .newfac .form-sub, .profile-edit .form-sub, .grid .region-row th { font-size: 12px; }
+.site h3, .site-edit-h h3, .newfac-h h3, .ml-head b { font-size: 16px; }
+.beds td { font-size: 20px; }
+.beds tfoot td { font-size: 16px; }
+.beds tfoot th { font-size: 14px; }
+.beds tbody th { font-size: 14px; }
+.upd-time { font-size: 14px; }
+.group-h h2, .ui-h, .panel h2 { font-size: 20px; font-weight: 400; color: var(--slate); }
+.success h2 { font-size: 20px; }
+.chips-h, .ui-top b, .feed-top b { font-size: 14px; }
+@media (max-width: 760px) {
+  .filters-toggle { display: inline-flex; }
+  .filters-body:not([hidden]) { margin-top: 14px; }
+  .filters-row, .more-filters { display: grid; grid-template-columns: minmax(0, 1fr); }
+  .filters-row .filter-col .selbtn, .more-btn { width: 100%; }
+  .more-col .lbl { display: none; }
+  .density { flex: 1 1 100%; }
+  .density .lbl { display: none; }
+  .chips { margin-top: 10px; padding-top: 10px; }
+}
+.filters-row { gap: 14px 20px; }
+.filters-row .seg label { padding: 6px 12px; }
+.filters-row .filter-col .selbtn { min-width: 190px; }
+@media (min-width: 761px) { .filters-row .more-col { margin-left: auto; } }
+
+/* ---------- Provider form: collapsed facilities, jump list, confirm, review ---------- */
+.site-wrap { border: 1px solid var(--ash); border-radius: var(--radius-lg); background: var(--white); margin-bottom: 12px; }
+.site-wrap .site-edit { border: 0; border-top: 1px solid var(--hairline); border-radius: 0; }
+.site-wrap .site-edit-h { display: none; }
+.site-wrap .profile-edit { border: 0; border-top: 1px solid var(--hairline); }
+h3.sum-h { margin: 0; font-size: inherit; }
+.sum-btn { width: 100%; display: grid; grid-template-columns: 1fr auto 18px; grid-template-areas: "name st chev" "last st chev"; gap: 2px 14px; align-items: center; text-align: left;
+  background: none; border: 0; padding: 12px 16px; min-height: 56px; font: inherit; color: inherit; cursor: pointer; border-radius: var(--radius-lg); }
+.sum-btn:hover { background: var(--smoke); }
+.sum-name { grid-area: name; font-size: 16px; font-weight: 700; color: var(--black); }
+.sum-name .full-name { font-weight: 400; font-size: 13px; color: var(--slate); }
+.sum-last { grid-area: last; font-size: 13px; color: var(--slate); }
+.sum-st, .jump-st { font-size: 12px; font-weight: 600; color: var(--slate); }
+.sum-st { grid-area: st; }
+.sum-st.done, .jump-st.done { color: var(--green-text); }
+.sum-btn .chev { grid-area: chev; color: var(--blue); transition: transform .15s; }
+.sum-btn[aria-expanded="true"] .chev { transform: rotate(180deg); }
+.sum-btn[aria-expanded="true"] { border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
+.jump { position: sticky; top: 0; z-index: 3; background: var(--white); margin: 0 -4px 12px; padding: 8px 4px; border-bottom: 1px solid var(--hairline); }
+.jump ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 8px; }
+.jump a { display: inline-flex; align-items: baseline; gap: 6px; min-height: 32px; padding: 6px 12px; border: 1px solid var(--ash); border-radius: 16px; font-size: 13px; color: var(--dark-blue); text-decoration: none; }
+.jump a:hover { background: var(--smoke); }
+.copied { margin: 8px 0 0; font-size: 13px; color: var(--green-text); }
+.copied:empty { display: none; }
+.srcdlg-took ul { margin: 4px 0 0; padding-left: 18px; }
+@media (prefers-reduced-motion: reduce) { .sum-btn .chev { transition: none; } }
+@media (max-width: 760px) {
+  .jump { position: static; }
+  .jump ul { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; }
+  .jump a { white-space: nowrap; }
+  .sum-btn { grid-template-columns: 1fr 18px; grid-template-areas: "name chev" "last chev" "st chev"; }
+}
+.jump li a:not(.btn), .jump li a:not(.btn):hover { text-decoration: none; }
+.sum-last { font-weight: 400; }
+.jump a .jump-st { font-weight: 400; }
+
+/* ---------- Type scale: keep everything on 12 / 13 / 14 / 16 / 20 / 26 ---------- */
+.panel .hint, .srcdlg-took, .srcdlg-meta, .btn.small, .assign, .feed-sites, .feed-note, .rep dl, .mail ul.parsed, .site .meta { font-size: 13px; }
+.field .help, .nocall, .grid .site-name span, .legend, .site-edit-h .last, .mail pre, pre.mailbody, .contact-note, .grid-tel, .lv-grid .help, .locpanel .help { font-size: 12px; }
+.bed-none { font-size: 14px; }

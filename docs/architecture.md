@@ -73,7 +73,7 @@ Either way: drop attachments, keep the text body for audit, and alert an admin w
 | POST | `/api/sites` (from the provider form) | Provider form | Per-provider link token — held as `review` until DHS approves |
 | GET/PUT/POST | `/api/sites`, `/api/orgs` (POST adds a facility) | Admin | County SSO |
 
-**Facility details** (levels of care, who they take, pregnancy / MOUD / medical / legal notes, payment, contact) are reports with a `profile: { siteId, before, after, changes }` block. They apply at once; reverting restores `before`.
+**Facility details** (levels of care, who they take, pregnancy / MOUD / medical / legal notes, payment, contact) are reports with a `profile: { siteId, before, after, changes }` block. They apply at once; reverting restores `before`, and undoing the revert re-applies `after`. Any admin decision can be undone by setting the report back to its previous status (`store.restore(id, status)`).
 
 **New facilities from providers** arrive as one report listing `newSites` (and `newOrg` for a new provider). They stay off the board until DHS approves; DHS-added facilities publish at once.
 

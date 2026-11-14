@@ -7,6 +7,16 @@
   var lastFocus = null;
 
   function siteName(id) { return S.siteById[id] ? S.siteById[id].name : id; }
+  function adminName() { var n = OB.remembered("adminName"); return n ? "DHS — " + n : "DHS admin"; }
+  // Short name for what a report touched, for toasts.
+  function itemName(r) {
+    if (r.referral) return siteName(r.referral.siteId);
+    if (r.profile) return siteName(r.profile.siteId);
+    var ids = (r.newSites || []).concat((r.entries || []).map(function (e) { return e.siteId; })).filter(function (x, i, a) { return x && a.indexOf(x) === i; });
+    if (ids.length) return ids.length > 2 ? siteName(ids[0]) + " and " + (ids.length - 1) + " more" : ids.map(siteName).join(" and ");
+    if (r.orgId && S.orgById[r.orgId]) return S.orgById[r.orgId].short;
+    return r.source === "email" && r.email ? "the email from " + r.email.from : "the update";
+  }
   function orgShort(id) { return id && S.orgById[id] ? S.orgById[id].short : "Unknown sender"; }
   function liveSites() { return S.sites.sites.filter(function (s) { return !s.pending; }); }
 
@@ -29,8 +39,8 @@
     var named = r.entries.filter(function (e) { return e.siteId; }).map(function (e) { return siteName(e.siteId); });
     var loose = r.entries.length - named.length;
     if (!r.entries.length) return "No counts found";
-    return (named.length > 3 ? named.length + " sites: " + named.slice(0, 3).join(", ") + " and " + (named.length - 3) + " more" : named.join(", ")) +
-      (loose ? (named.length ? " · " : "") + OB.plural(loose, "count") + " not matched to a site" : "");
+    return (named.length > 3 ? named.length + " facilities: " + named.slice(0, 3).join(", ") + " and " + (named.length - 3) + " more" : named.join(", ")) +
+      (loose ? (named.length ? " · " : "") + OB.plural(loose, "count") + " not matched to a facility" : "");
   }
   function whoLine(r) {
     if (r.source === "referral") return "Pathways" + (r.by && r.by.indexOf(": ") > -1 ? " · " + r.by.split(": ")[1] : "");
@@ -46,10 +56,10 @@
 
   function item(r) {
     var f = OB.when(r.receivedAt), st = statusText(r);
-    var siteOpts = '<option value="">Assign to site…</option>' + liveSites().map(function (s) { return '<option value="' + s.id + '">' + esc(s.name + " — " + S.orgById[s.org].short) + "</option>"; }).join("");
+    var siteOpts = '<option value="">Assign to facility…</option>' + liveSites().map(function (s) { return '<option value="' + s.id + '">' + esc(s.name + " — " + S.orgById[s.org].short) + "</option>"; }).join("");
     var assign = r.status !== "published" && r.source === "email" ? r.entries.map(function (e, i) {
       if (e.siteId) return "";
-      return '<div class="assign"><span>' + esc(OB.entrySummary(e)) + '</span><label class="sr" for="as-' + r.id + "-" + i + '">Site for these counts</label><select class="sel-in" id="as-' + r.id + "-" + i + '" data-assign="' + r.id + '" data-idx="' + i + '">' + siteOpts + "</select></div>";
+      return '<div class="assign"><span>' + esc(OB.entrySummary(e)) + '</span><label class="sr" for="as-' + r.id + "-" + i + '">Facility for these counts</label><select class="sel-in" id="as-' + r.id + "-" + i + '" data-assign="' + r.id + '" data-idx="' + i + '">' + siteOpts + "</select></div>";
     }).join("") : "";
     var warn = r.status === "review" && r.parse && r.parse.warnings && r.parse.warnings.length ? '<p class="ui-warn">' + esc(r.parse.warnings[0]) + "</p>" : "";
     var view = '<button type="button" class="linkbtn" data-report="' + esc(r.id) + '" aria-haspopup="dialog">' + (r.source === "email" ? "View email" : "View details") + "</button>";
@@ -150,7 +160,7 @@
       });
       r.entries.forEach(function (e) {
         var isNew = (r.newSites || []).indexOf(e.siteId) > -1;
-        var lines = isNew ? ["Added as a new facility: " + OB.entrySummary(e)] : e.siteId ? changeLines(lastPub[e.siteId], e) : ["Counts not matched to a site: " + OB.entrySummary(e)];
+        var lines = isNew ? ["Added as a new facility: " + OB.entrySummary(e)] : e.siteId ? changeLines(lastPub[e.siteId], e) : ["Counts not matched to a facility: " + OB.entrySummary(e)];
         items.push({ r: r, siteId: e.siteId, kind: "counts", lines: lines });
         if (e.siteId && !off) lastPub[e.siteId] = e;
       });
@@ -199,11 +209,15 @@
     var id = b.getAttribute("data-id");
     var r = S.reports().filter(function (x) { return x.id === id; })[0];
     var act = b.getAttribute("data-act");
-    if (act === "undo") { S.undoReferral(id, { by: "DHS admin" }); say("Referral undone — the bed is back on the board."); return; }
-    if (act === "reject") { S.reject(id); say(r.profile ? "Reverted — the facility’s details are back to what they were." : r.status === "published" ? "Removed from the board." : "Rejected."); return; }
+    var was = r.status, name = itemName(r);
+    function undoable(msg) {
+      OB.toast(msg, function () { S.restore(id, was, { by: adminName() }); OB.toast("Undone — " + name + " is back the way it was."); });
+    }
+    if (act === "undo") { S.undoReferral(id, { by: adminName() }); undoable("Referral undone — the bed is back on the board at " + name + "."); return; }
+    if (act === "reject") { S.reject(id, { by: adminName() }); undoable(r.profile ? "Reverted " + name + "’s details to what they were." : was === "published" ? "Removed from the board: " + name + "." : "Rejected: " + name + "."); return; }
     var entries = assigned(r);
-    if (!entries) { say("Assign every count to a site first."); var sel = document.querySelector('[data-assign="' + id + '"]'); if (sel) sel.focus(); return; }
-    if (act === "publish") { S.publish(id, { entries: entries }); say(r.newSites ? "Approved — the new facilit" + (r.newSites.length === 1 ? "y is" : "ies are") + " on the board." : "Published. The bed board is updated."); return; }
+    if (!entries) { say("Assign every count to a facility first."); var sel = document.querySelector('[data-assign="' + id + '"]'); if (sel) sel.focus(); return; }
+    if (act === "publish") { S.publish(id, { entries: entries, by: adminName() }); undoable(r.newSites ? "Approved — the new facilit" + (r.newSites.length === 1 ? "y is" : "ies are") + " on the board." : "Published " + name + ". The bed board is updated."); return; }
     if (act === "edit") openEmailEdit(r, entries);
   }
 
@@ -352,7 +366,7 @@
 
   function renderSitePicker() {
     var cur = S.current(), keep = $("pick-site").value;
-    $("pick-site").innerHTML = '<option value="">Choose a site…</option>' + liveSites().map(function (s) {
+    $("pick-site").innerHTML = '<option value="">Choose a facility…</option>' + liveSites().map(function (s) {
       var c = cur[s.id], stale = !c || OB.when(c.report.receivedAt).hours >= 24;
       return '<option value="' + s.id + '">' + esc(s.name + " — " + S.orgById[s.org].short + (stale ? " (no update in 24 h)" : "")) + "</option>";
     }).join("");
@@ -380,7 +394,7 @@
     var review = S.reports().filter(function (r) { return r.status === "review"; }).length;
     var cur = S.current(), live = liveSites();
     var fresh = live.filter(function (s) { return cur[s.id] && OB.when(cur[s.id].report.receivedAt).hours < 24; }).length;
-    $("admin-meta").textContent = fresh + " of " + live.length + " sites updated in the last 24 hours · " + OB.plural(review, "update") + " waiting for review.";
+    $("admin-meta").textContent = fresh + " of " + live.length + " facilities updated in the last 24 hours · " + OB.plural(review, "update") + " waiting for review.";
     $("review-badge").hidden = !review;
     $("review-badge").textContent = review;
     $("review-badge").setAttribute("aria-label", review + " need review");
@@ -410,12 +424,12 @@
   $("upd-list").addEventListener("click", function (e) { var b = e.target.closest("[data-fix]"); if (b) openSiteUpdate(b.getAttribute("data-fix")); });
   $("upd-site").addEventListener("change", function (e) { ui.site = e.target.value; renderUpdates(); });
   $("pick-details").addEventListener("click", function () {
-    if (!$("pick-site").value) { say("Choose a site first."); $("pick-site").focus(); return; }
+    if (!$("pick-site").value) { say("Choose a facility first."); $("pick-site").focus(); return; }
     openProfile($("pick-site").value);
   });
   $("add-site").addEventListener("click", openAddFacility);
   $("pick-go").addEventListener("click", function () {
-    if (!$("pick-site").value) { say("Choose a site to update."); $("pick-site").focus(); return; }
+    if (!$("pick-site").value) { say("Choose a facility to update."); $("pick-site").focus(); return; }
     openSiteUpdate($("pick-site").value);
   });
   $("set-auto").addEventListener("change", function (e) { S.setSetting("autoPublish", e.target.checked); say(e.target.checked ? "Recognized emails will publish automatically." : "Every email will wait for review."); });

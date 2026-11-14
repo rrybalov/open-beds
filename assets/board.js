@@ -6,7 +6,7 @@
   var REGIONS = S.sites.regions;
   var BED_TYPES = ["detox", "residential", "php", "outpatient"];
   var TYPE_OPTS = [["any", "Any type"], ["detox", "Detox"], ["residential", "Residential"], ["php", "PHP"], ["outpatient", "Outpatient"]];
-  var SEX_OPTS = [["any", "Any"], ["male", "Male"], ["female", "Female"]];
+  var SEX_OPTS = [["any", "Any"], ["male", "Men"], ["female", "Women"]];
   var AGE_OPTS = [["adult", "Adults"], ["adolescent", "Adolescents"], ["all", "All"]];
   var TYPE_LABEL = OB.TYPE_LABEL;
   var SEX_SHORT = { male: "M", female: "F", any: "" };
@@ -101,7 +101,7 @@
     el.innerHTML = opts.map(function (o) {
       var id = name + "-" + o[0];
       return '<input type="radio" name="' + name + '" id="' + id + '" value="' + o[0] + '"' + (state[key] === o[0] ? " checked" : "") + '>' +
-        '<label for="' + id + '">' + esc(o[1]) + "</label>";
+        '<label for="' + id + '">' + esc(o[1]) + (key === "type" ? ' <span class="seg-n" id="n-' + o[0] + '"></span>' : "") + "</label>";
     }).join("");
     el.addEventListener("change", function (e) { state[key] = e.target.value; render(); });
   }
@@ -110,49 +110,202 @@
     if (el) el.checked = true;
   }
 
-  // ---------- tiles ----------
-  function renderTiles(sites) {
+  // ---------- counts in the Bed type control (replaces the count cards) ----------
+  function renderCounts(sites) {
     function sum(type) {
-      var n = 0, s = 0, u = 0;
+      var n = 0, s = 0;
       sites.forEach(function (site) {
         if (site.noReport) return;
         var a = avail(site, type, state.sex);
         if (a.state !== "open" || a.shared) return;
-        if (a.note) u += a.n; else { n += a.n; s++; }
+        n += a.n; s++;
       });
-      return { n: n, s: s, u: u };
+      return { n: n, s: s };
     }
     var dx = sum("detox"), rs = sum("residential"), ph = sum("php");
-    var sharedN = 0, sharedS = 0, op = 0, noCount = 0;
+    var all = 0, sharedN = 0, sharedS = 0, op = 0, noCount = 0;
     sites.forEach(function (site) {
       if (site.noReport) return;
+      var a = availAny(site, state.sex);
+      if (a.state === "open") all += a.n;
       if (site.shared) { sharedN += site.shared.open; sharedS++; }
       var o = avail(site, "outpatient", state.sex);
       if ((o.state === "open" || o.state === "avail") && !isNoCount(site)) op++;
       if (isNoCount(site)) noCount++;
     });
-    var sexWord = state.sex === "any" ? "" : (state.sex === "male" ? " · men" : " · women");
-    function sub(x) { return plural(x.s, "site") + " with a count" + (x.u ? " · +" + x.u + " sex not stated" : ""); }
-    function tile(type, n, l, s) {
-      return '<button type="button" class="tile" data-type="' + type + '" aria-pressed="' + (state.type === type) + '">' +
-        '<span class="n">' + n + '</span><span class="l">' + l + '</span><span class="s">' + s + "</span></button>";
+    var who = state.sex === "male" ? " for men" : state.sex === "female" ? " for women" : "";
+    function put(type, n, sr) {
+      var el = document.getElementById("n-" + type);
+      if (el) el.innerHTML = '<span aria-hidden="true">' + n + '</span><span class="sr">, ' + esc(sr) + "</span>";
     }
-    $("tiles").innerHTML =
-      tile("detox", dx.n, "Detox beds open" + sexWord, sub(dx)) +
-      tile("residential", rs.n, "Residential beds open" + sexWord, sub(rs)) +
-      tile("php", ph.n, "PHP slots open" + sexWord, sub(ph)) +
-      '<div class="tile note"><span class="n">' + sharedN + '</span><span class="l">Detox or rehab, not split</span><span class="s">' + plural(sharedS, "site") + " · one shared count" + (state.sex !== "any" ? ", sex not stated" : "") + "</span></div>" +
-      tile("outpatient", op, "Outpatient accepting", "Sites saying yes") +
-      '<div class="tile note"><span class="n">' + noCount + '</span><span class="l">“Beds available”, no count</span><span class="s">Call for type and number</span></div>';
-    Array.prototype.forEach.call(document.querySelectorAll("#tiles button.tile"), function (b) {
-      b.addEventListener("click", function () {
-        var t = b.getAttribute("data-type");
-        state.type = state.type === t ? "any" : t;
-        state.view = "find";
-        syncSeg("f-type", "type");
-        render();
-      });
+    put("any", all, all + " open beds" + who);
+    put("detox", dx.n, dx.n + " open beds" + who);
+    put("residential", rs.n, rs.n + " open beds" + who);
+    put("php", ph.n, ph.n + " open beds" + who);
+    put("outpatient", op, plural(op, "facility", "facilities") + " accepting");
+    var also = [];
+    if (sharedS) also.push(plural(sharedS, "facility", "facilities") + " report detox and rehab as one count (" + sharedN + " beds" + (state.sex !== "any" ? ", sex not given" : "") + ")");
+    if (noCount) also.push(plural(noCount, "facility", "facilities") + " say" + (noCount === 1 ? "s" : "") + " beds are available without a count — call to ask");
+    $("also").textContent = also.length ? "Also: " + also.join(" · ") + "." : "";
+    $("also").hidden = !also.length || state.view === "updates";
+  }
+
+  // ---------- active filters: chips, counts, Clear all ----------
+  var DEFAULTS = { type: "any", sex: "any", age: "adult", loca: "any", pay: "any", sudOnly: false, recentOnly: false };
+  var AGE_WORD = { adolescent: "Adolescents", all: "All ages" };
+  function activeFilters() {
+    var out = [];
+    if (state.type !== "any") out.push({ key: "type", label: TYPE_LABEL[state.type], main: true });
+    if (state.sex !== "any") out.push({ key: "sex", label: state.sex === "male" ? "Men" : "Women", main: true });
+    if (state.locs.length) out.push({ key: "locs", label: locLabel(), main: true });
+    if (state.age !== "adult") out.push({ key: "age", label: AGE_WORD[state.age] });
+    if (state.loca !== "any") out.push({ key: "loca", label: "LOCA " + LEVEL[state.loca].short });
+    if (state.pay !== "any") out.push({ key: "pay", label: PAY[state.pay].short.charAt(0).toUpperCase() + PAY[state.pay].short.slice(1) });
+    if (state.sudOnly) out.push({ key: "sudOnly", label: "Substance use treatment only" });
+    if (state.recentOnly) out.push({ key: "recentOnly", label: "Updated in the last 24 hours" });
+    if (state.origin) out.push({ key: "origin", label: "Near " + state.origin.label, main: true });
+    return out;
+  }
+  function clearFilter(key) {
+    if (key === "locs") state.locs = [];
+    else if (key === "origin") { state.origin = null; $("map-q").value = ""; mapMsg(""); if (state.sort === "distance") state.sort = "region"; }
+    else state[key] = DEFAULTS[key];
+  }
+  function renderChips(count) {
+    var act = activeFilters();
+    var more = act.filter(function (f) { return !f.main && f.key !== "origin"; }).length;
+    $("more-count").textContent = more ? "(" + more + ")" : "";
+    $("filters-count").textContent = act.length ? "(" + act.length + ")" : "";
+    $("chips").innerHTML = act.length
+      ? '<span class="chips-h">' + esc(count) + "</span>" + act.map(function (f) {
+          return '<button type="button" class="chip" data-clear="' + f.key + '" aria-label="Remove filter: ' + esc(f.label) + '">' + esc(f.label) +
+            '<svg class="icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>';
+        }).join("") + '<button type="button" class="linkbtn" data-clear="all">Clear all filters</button>'
+      : "";
+    $("chips").hidden = !act.length;
+  }
+  $("chips").addEventListener("click", function (e) {
+    var b = e.target.closest("[data-clear]");
+    if (!b) return;
+    var k = b.getAttribute("data-clear");
+    if (k === "all") activeFilters().forEach(function (f) { clearFilter(f.key); });
+    else clearFilter(k);
+    syncControls();
+    render();
+    var next = $("chips").querySelector(".chip") || $("f-type").querySelector("input:checked");
+    if (next) next.focus();
+  });
+
+  // Put every control back in step with state (after Clear all, or a link that set filters).
+  function syncControls() {
+    syncSeg("f-type", "type"); syncSeg("f-sex", "sex"); syncSeg("f-age", "age"); syncSeg("f-mode", "mode");
+    $("f-loca").value = state.loca; $("f-pay").value = state.pay; $("f-sort").value = state.sort;
+    $("f-sud").checked = state.sudOnly; $("f-fresh").checked = state.recentOnly;
+    $("f-loc-btn").textContent = locLabel();
+    var opt = document.querySelector('#f-sort option[value="distance"]');
+    opt.disabled = !state.origin;
+    $("map-clear").hidden = !state.origin;
+    if (state.origin && !$("map-q").value) $("map-q").value = state.origin.label.replace(/^ZIP /, "").replace(/ \(.*\)$/, "");
+  }
+
+  // ---------- More filters, phone Filters button ----------
+  function setMore(open) {
+    $("more-filters").hidden = !open;
+    $("more-btn").setAttribute("aria-expanded", open);
+  }
+  $("more-btn").addEventListener("click", function () { setMore($("more-filters").hidden); });
+  var PHONE = window.matchMedia("(max-width: 760px)");
+  var filtersOpen = false;
+  function applyFilterLayout() {
+    $("filters-body").hidden = PHONE.matches && !filtersOpen;
+    $("filters-toggle").setAttribute("aria-expanded", !PHONE.matches || filtersOpen);
+  }
+  $("filters-toggle").addEventListener("click", function () { filtersOpen = !filtersOpen; applyFilterLayout(); });
+  if (PHONE.addEventListener) PHONE.addEventListener("change", applyFilterLayout);
+
+  // ---------- notice, compact cards, contact notes ----------
+  if (OB.remembered("noticeDismissed") === "1") $("notice").hidden = true;
+  $("notice-x").addEventListener("click", function () { $("notice").hidden = true; OB.remember("noticeDismissed", "1"); $("filters").querySelector("input, button").focus(); });
+  var openNotes = {};
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest(".note-btn");
+    if (!b) return;
+    var id = b.getAttribute("aria-controls"), on = b.getAttribute("aria-expanded") !== "true";
+    openNotes[id] = on;
+    b.setAttribute("aria-expanded", on);
+    $(id).hidden = !on;
+  });
+  $("f-compact").checked = OB.remembered("compact") === "1";
+  $("f-compact").addEventListener("change", function (e) { OB.remember("compact", e.target.checked ? "1" : ""); render(); });
+
+  // ---------- filters live in the URL (shareable, bookmarkable) and are remembered ----------
+  var URL_KEYS = { type: "type", sex: "sex", age: "age", loca: "loca", pay: "pay", view: "view", mode: "mode", sort: "sort", selected: "site" };
+  var URL_DEF = { type: "any", sex: "any", age: "adult", loca: "any", pay: "any", view: "find", mode: "list", sort: "region", selected: null };
+  function toQuery() {
+    var q = new URLSearchParams();
+    Object.keys(URL_KEYS).forEach(function (k) { if (state[k] && state[k] !== URL_DEF[k]) q.set(URL_KEYS[k], state[k]); });
+    if (state.locs.length) q.set("locs", state.locs.join(","));
+    if (state.sudOnly) q.set("sud", "1");
+    if (state.recentOnly) q.set("fresh", "1");
+    if (state.origin) q.set("near", [state.origin.lat.toFixed(4), state.origin.lng.toFixed(4), state.origin.label].join(","));
+    return q.toString();
+  }
+  function fromQuery(qs) {
+    var q = new URLSearchParams(qs), ok = { type: TYPE_OPTS, sex: SEX_OPTS, age: AGE_OPTS };
+    Object.keys(URL_KEYS).forEach(function (k) {
+      var v = q.get(URL_KEYS[k]);
+      if (v === null) return;
+      if (ok[k] && !ok[k].some(function (o) { return o[0] === v; })) return;
+      state[k] = v;
     });
+    if (q.get("locs")) state.locs = q.get("locs").split(",").filter(function (id) { return S.siteById[id]; });
+    state.sudOnly = q.get("sud") === "1";
+    state.recentOnly = q.get("fresh") === "1";
+    var near = q.get("near");
+    if (near) { var p = near.split(","); if (p.length >= 3 && !isNaN(+p[0])) state.origin = { lat: +p[0], lng: +p[1], label: p.slice(2).join(",") }; }
+    if (state.loca !== "any" && !LEVEL[state.loca]) state.loca = "any";
+    if (state.pay !== "any" && !PAY[state.pay]) state.pay = "any";
+  }
+  function saveState() {
+    var qs = toQuery();
+    try { history.replaceState(null, "", location.pathname + (qs ? "?" + qs : "")); } catch (e) { /* file:// */ }
+    OB.remember("filters", qs);
+  }
+  (function loadState() {
+    var qs = location.search.replace(/^\?/, "") || OB.remembered("filters");
+    if (qs) fromQuery(qs);
+  })();
+
+  // ---------- live changes and stale data ----------
+  var lastSig = null, storeTick = false, flash = {}, liveTimer = null;
+  function signature(site) { return JSON.stringify([site.report && site.report.id, site.counts, site.shared && site.shared.open, (site.referrals || []).length]); }
+  function noteChanges(all) {
+    var sig = {};
+    all.forEach(function (s) { sig[s.id] = signature(s); });
+    if (lastSig && storeTick) {
+      var changed = all.filter(function (s) { return lastSig[s.id] !== sig[s.id]; });
+      if (changed.length) {
+        var until = Date.now() + 4000;
+        changed.forEach(function (s) { flash[s.id] = until; });
+        $("live-note").textContent = "Just updated: " + changed.slice(0, 4).map(function (s) { return s.name; }).join(", ") + (changed.length > 4 ? " and " + (changed.length - 4) + " more" : "") + ".";
+        clearTimeout(liveTimer);
+        liveTimer = setTimeout(function () { $("live-note").textContent = ""; }, 20000);
+      }
+    }
+    storeTick = false;
+    lastSig = sig;
+  }
+  function applyFlash() {
+    var now = Date.now();
+    Object.keys(flash).forEach(function (id) {
+      if (flash[id] < now) { delete flash[id]; return; }
+      ["card-" + id, "ml-" + id, "row-" + id].forEach(function (eid) { var el = $(eid); if (el) el.classList.add("just-changed"); });
+    });
+  }
+  function renderStale(latest) {
+    var h = latest ? (Date.now() - latest) / 36e5 : Infinity;
+    $("stale").hidden = h < 12;
+    if (h >= 12) $("stale").innerHTML = '<svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20"><path d="M12 8v5M12 16.5h.01" /><circle cx="12" cy="12" r="9" /></svg><p><b>No provider updates in ' + (isFinite(h) ? Math.floor(h) + " hours" : "a while") + ".</b> Counts may be out of date — call before you refer.</p>";
   }
 
   // ---------- find a bed ----------
@@ -318,7 +471,7 @@
       "Is a bed still available, and what do you need from us to send a referral?\n\nThank you,\n";
     return "mailto:" + em.to + "?subject=" + encodeURIComponent("Bed availability — " + site.name + " (Pathways)") + "&body=" + encodeURIComponent(body);
   }
-  function contactStrip(site) {
+  function contactStrip(site, where) {
     var r = site.reach || {}, m = mailto(site), em = intakeEmail(site), bits = [];
     if (r.phone) bits.push('<a class="cbtn primary" href="' + tel(r.phone) + '" aria-label="Call ' + esc(site.name) + " admissions, " + esc(r.phone) + '">' + PHONE_SVG + esc(r.phone) + "</a>");
     var forSite = '<span class="sr"> for ' + esc(site.name) + "</span>";
@@ -334,7 +487,10 @@
     else notes.push("No intake email on file.");
     if (!r.phone) notes.push("No phone on file.");
     // Mark a referral sits at the right end of the same row.
-    return '<div class="contact"><p class="contact-h">Contact admissions</p><div class="contact-btns">' + bits.join("") + referButton(site) + '</div><p class="contact-note">' + esc(notes.join(" ")) + "</p></div>";
+    var nid = (where || "cn") + "-" + site.id, open = !!openNotes[nid];
+    return '<div class="contact"><p class="contact-h">Contact admissions</p><div class="contact-btns">' + bits.join("") + referButton(site) + "</div>" +
+      '<button type="button" class="linkbtn note-btn" aria-expanded="' + open + '" aria-controls="' + nid + '">Where these contacts came from<span class="sr"> — ' + esc(site.name) + "</span></button>" +
+      '<p class="contact-note" id="' + nid + '"' + (open ? "" : " hidden") + ">" + esc(notes.join(" ")) + "</p></div>";
   }
 
   function addressLine(site) {
@@ -382,37 +538,37 @@
       (state.age === "adolescent" ? " (adolescents)" : "");
     var who = state.sex === "male" ? "men" : "women";
     $("status").textContent = state.sex === "any"
-      ? plural(open.length, "site") + " report " + beds + " open " + what + "; " + av.length + " more " + (av.length === 1 ? "says it has" : "say they have") + " availability without a count."
-      : plural(open.length, "site") + " report open " + what + ": " + (beds - unst) + " confirmed for " + who + ", plus " + unst + " where the report doesn’t give sex. " + av.length + " more without a count.";
+      ? plural(open.length, "facility", "facilities") + " report " + beds + " open " + what + "; " + av.length + " more " + (av.length === 1 ? "says it has" : "say they have") + " availability without a count."
+      : plural(open.length, "facility", "facilities") + " report open " + what + ": " + (beds - unst) + " confirmed for " + who + ", plus " + unst + " where the report doesn’t give sex. " + av.length + " more without a count.";
 
     var html = "";
     if (open.length) {
-      html += '<div class="group-h"><h2>Open — count reported</h2><span>' + plural(open.length, "site") + " · " + plural(beds, "bed") + "</span></div>";
+      html += '<div class="group-h"><h2>Open — count reported</h2><span>' + plural(open.length, "facility", "facilities") + " · " + plural(beds, "bed") + "</span></div>";
       html += '<div class="cards">' + open.map(function (r) { return card(r.site, r.a); }).join("") + "</div>";
     }
     if (av.length) {
-      html += '<div class="group-h"><h2>Available — call for details</h2><span>' + plural(av.length, "site") + "</span></div>";
+      html += '<div class="group-h"><h2>Available — call for details</h2><span>' + plural(av.length, "facility", "facilities") + "</span></div>";
       html += '<div class="cards">' + av.map(function (r) { return card(r.site, r.a); }).join("") + "</div>";
     }
     if (!open.length && !av.length) {
-      html += '<div class="empty">No site reports open ' + esc(what) + " right now. Check “Full today” below, widen the filters, or call providers who didn’t report.</div>";
+      html += '<div class="empty">No facility reports open ' + esc(what) + " right now. Check “Full today” below, widen the filters, or call providers who didn’t report.</div>";
     }
     if (full.length) {
       html += '<details class="more"><summary>Full today (' + full.length + ")</summary><div class=\"cards\">" + full.map(function (r) { return card(r.site, r.a); }).join("") + "</div></details>";
     }
     var foot = [];
-    if (other) foot.push(plural(other, "other site") + " in recent reports " + (other === 1 ? "doesn’t" : "don’t") + " offer this or didn’t mention it.");
-    if (none.length) foot.push(plural(none.length, "site") + " " + (none.length === 1 ? "hasn’t" : "haven’t") + " reported yet: " + none.map(function (r) { return esc(r.site.name); }).join(", ") + ".");
+    if (other) foot.push(plural(other, "other facility", "other facilities") + " in recent reports " + (other === 1 ? "doesn’t" : "don’t") + " offer this or didn’t mention it.");
+    if (none.length) foot.push(plural(none.length, "facility", "facilities") + " " + (none.length === 1 ? "hasn’t" : "haven’t") + " reported yet: " + none.map(function (r) { return esc(r.site.name); }).join(", ") + ".");
     if (state.loca !== "any") {
       var noLv = S.boardSites().filter(function (s) { return !(s.fit.levels && s.fit.levels.length); }).length;
-      foot.push("Showing sites that accept LOCA level " + esc(LEVEL[state.loca].short) + ". " + plural(noLv, "site") + " with no levels on file " + (noLv === 1 ? "is" : "are") + " hidden — call them to check.");
+      foot.push("Showing facilities that accept LOCA level " + esc(LEVEL[state.loca].short) + ". " + plural(noLv, "facility", "facilities") + " with no levels on file " + (noLv === 1 ? "is" : "are") + " hidden — call them to check.");
     }
     if (state.pay !== "any") {
       var shown = rows.filter(function (r) { return r.a.state !== "none"; });
       var yes = shown.filter(function (r) { return payStatus(r.site) === true; }).length;
       var no = S.boardSites().filter(function (s) { return (s.fit.pay || {})[state.pay] === false; }).length;
-      foot.push(plural(yes, "site") + " on file as taking " + esc(PAY[state.pay].short) + " " + (yes === 1 ? "is" : "are") + " listed first. Payment isn’t on file for the rest — ask when you call." +
-        (no ? " " + plural(no, "site") + " that " + (no === 1 ? "doesn’t" : "don’t") + " take it " + (no === 1 ? "is" : "are") + " hidden." : ""));
+      foot.push(plural(yes, "facility", "facilities") + " on file as taking " + esc(PAY[state.pay].short) + " " + (yes === 1 ? "is" : "are") + " listed first. Payment isn’t on file for the rest — ask when you call." +
+        (no ? " " + plural(no, "facility", "facilities") + " that " + (no === 1 ? "doesn’t" : "don’t") + " take it " + (no === 1 ? "is" : "are") + " hidden." : ""));
     }
     if (foot.length) html += '<p class="footnote">' + foot.join(" ") + "</p>";
     $("find-list").innerHTML = html;
@@ -438,7 +594,7 @@
       return '<th scope="col" class="num' + (state.type === t ? " sel" : "") + '">' + TYPE_LABEL[t] + "</th>";
     }).join("");
     var body = regions.map(function (r) {
-      var head = '<tr class="region-row"><th scope="rowgroup" colspan="6">' + esc(REGIONS[r].label) + " · " + plural(byRegion[r].length, "site") + "</th></tr>";
+      var head = '<tr class="region-row"><th scope="rowgroup" colspan="6">' + esc(REGIONS[r].label) + " · " + plural(byRegion[r].length, "facility", "facilities") + "</th></tr>";
       return head + byRegion[r].map(function (site) {
         var cells = "", upd;
         if (site.noReport) {
@@ -468,16 +624,16 @@
           }
         }
         var lv = (site.fit.levels || []).map(function (c) { return LEVEL[c].short; }).join(" · ");
-        return "<tr><th scope=\"row\" class=\"site-name\"><b>" + esc(site.name) + "</b><span>" + esc(site.org) + " · " + esc(site.town) + "</span><span class=\"grid-lv\">" + (lv ? "Levels " + esc(lv) : "Levels not on file") + (site.fit.excludes ? " · won’t take: " + esc(site.fit.excludes.join("; ")) : "") + "</span></th>" +
+        return "<tr id=\"row-" + esc(site.id) + "\"><th scope=\"row\" class=\"site-name\"><b>" + esc(site.name) + "</b><span>" + esc(site.org) + " · " + esc(site.town) + "</span><span class=\"grid-lv\">" + (lv ? "Levels " + esc(lv) : "Levels not on file") + (site.fit.excludes ? " · won’t take: " + esc(site.fit.excludes.join("; ")) : "") + "</span></th>" +
           cells + '<td class="upd-cell">' + upd + "</td></tr>";
       }).join("");
     }).join("");
 
-    $("status").textContent = plural(sites.length, "site") + (state.sex === "any" ? "" : state.sex === "male" ? " · counts for men" : " · counts for women") + ".";
+    $("status").textContent = plural(sites.length, "facility", "facilities") + (state.sex === "any" ? "" : state.sex === "male" ? " · counts for men" : " · counts for women") + ".";
     $("view-grid").innerHTML = sites.length
-      ? '<div class="gridwrap"><table class="grid"><caption class="sr">Open beds by site and bed type</caption><thead><tr><th scope="col">Site</th>' + cols + '<th scope="col">Last update</th></tr></thead><tbody>' + body + "</tbody></table>" +
+      ? '<div class="gridwrap"><table class="grid"><caption class="sr">Open beds by facility and bed type</caption><thead><tr><th scope="col">Facility</th>' + cols + '<th scope="col">Last update</th></tr></thead><tbody>' + body + "</tbody></table>" +
         '<div class="legend"><span><span class="cell open"><b>6</b></span> open (M · F split where given)</span><span><span class="cell full"><b>Full</b></span> offered, 0 open</span><span><span class="cell na"><b>NA</b></span> marked NA by provider</span><span><span class="cell nr"><b>—</b></span> not in report</span><span><span class="cell avail"><b>Yes</b></span> available, no count</span></div></div>'
-      : '<div class="empty">No sites match these filters.</div>';
+      : '<div class="empty">No facilities match these filters.</div>';
   }
 
   // ---------- updates feed ----------
@@ -497,7 +653,7 @@
       var org = r.orgId && S.orgById[r.orgId] ? S.orgById[r.orgId].short : "Unknown sender";
       var what = r.source === "referral"
         ? "Referral marked" + (r.by && r.by.indexOf(": ") > -1 ? " by " + r.by.split(": ")[1] : "") + " — one " + (r.referral.type === "shared" ? "detox or rehab" : TYPE_LABEL[r.referral.type].toLowerCase()) + " bed at " + names[0]
-        : plural(names.length, "site") + ": " + names.join(", ");
+        : plural(names.length, "facility", "facilities") + ": " + names.join(", ");
       return '<article class="feed"><div class="feed-top"><b>' + esc(r.source === "referral" ? "Pathways" : org) + '</b><span class="upd-src">' + OB.ICON[r.source] + " " + esc(OB.SOURCE[r.source].label) + '</span><span class="upd-time ' + f.level + '">' + esc(f.label) + "</span>" +
         '<button type="button" class="linkbtn" data-report="' + esc(r.id) + '">View source</button></div>' +
         '<div class="feed-sites">' + esc(what) + "</div>" +
@@ -536,7 +692,7 @@
     return siteMeta(site) + bedTable(site) + bedNotes(site) +
       (site.geo && PRECISION[site.geo.precision] ? '<p class="fit-note">' + PRECISION[site.geo.precision] + "</p>" : "") +
       '<div class="ml-upd">' + updatedBlock(site) + "</div>" +
-      fitSection(site) + contactStrip(site);
+      fitSection(site) + contactStrip(site, "mcn");
   }
 
   function renderMap(sites) {
@@ -549,8 +705,8 @@
     var nearestOpen = state.origin ? open.filter(function (r) { return r.site.geo; })[0] : null;
     var what = state.type === "any" ? "beds" : TYPE_LABEL[state.type].toLowerCase() + " beds";
     $("status").textContent = state.origin
-      ? "Nearest to " + state.origin.label + ". " + (nearestOpen ? "Closest site with open " + what + ": " + nearestOpen.site.name + ", " + distLabel(nearestOpen.site) + " (straight-line)." : "No site with a reported open count matches these filters.")
-      : plural(open.length, "site") + " with open " + what + " · " + plural(placed.length, "site") + " on the map. Select a pin to see its availability.";
+      ? "Nearest to " + state.origin.label + ". " + (nearestOpen ? "Closest facility with open " + what + ": " + nearestOpen.site.name + ", " + distLabel(nearestOpen.site) + " (straight-line)." : "No facility with a reported open count matches these filters.")
+      : plural(open.length, "facility", "facilities") + " with open " + what + " · " + plural(placed.length, "facility", "facilities") + " on the map. Select a pin to see its availability.";
     if (state.selected && !rows.some(function (r) { return r.site.id === state.selected; })) state.selected = null;
 
     $("map-list").innerHTML = rows.map(function (r) {
@@ -561,7 +717,7 @@
         '<span class="ml-body"><b>' + esc(s.name) + '</b><span class="ml-where">' + esc(s.org) + " · " + esc(s.town) + (state.origin ? " · " + esc(distLabel(s)) : "") + "</span>" +
         '<span class="sr">' + esc(b.say) + "</span></span>" + '<span class="ml-chev" aria-hidden="true"></span></button>' +
         '<div class="ml-detail" id="mld-' + esc(s.id) + '"' + (on ? "" : " hidden") + ">" + (on ? detail(s, r.a) : "") + "</div></li>";
-    }).join("") || '<li class="empty">No sites match these filters.</li>';
+    }).join("") || '<li class="empty">No facilities match these filters.</li>';
 
     if (!ensureMap()) return;
     map.invalidateSize();
@@ -723,33 +879,16 @@
       toast("Referral marked: " + site.name + ", " + optLabel(o).split(" · ")[0].toLowerCase() + " now " + (o.n - 1) + " open.", r.id);
     });
   }
-  var toastTimer = null;
   function toast(msg, undoId) {
-    var t = $("toast");
-    if (!t) { t = document.createElement("div"); t.id = "toast"; t.className = "toast"; t.setAttribute("role", "status"); document.body.appendChild(t); }
-    t.innerHTML = "<span>" + esc(msg) + "</span>" + (undoId ? '<button type="button" class="linkbtn toast-undo" data-undo="' + esc(undoId) + '">Undo</button>' : "") +
-      '<button type="button" class="toast-x" aria-label="Dismiss message">' + '<svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>';
-    t.hidden = false;
-    // Focused controls scroll clear of the toast while it shows (WCAG 2.4.11).
-    document.documentElement.style.scrollPaddingBottom = "96px";
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(hideToast, 12000);
+    OB.toast(msg, undoId ? function () {
+      S.undoReferral(undoId, { by: "Pathways" + (lastInitials() ? ": " + lastInitials() : "") });
+      OB.toast("Referral undone. The bed is back on the board.");
+    } : null);
   }
-  function hideToast() {
-    var t = $("toast");
-    if (t) t.hidden = true;
-    document.documentElement.style.scrollPaddingBottom = "";
-  }
-  document.addEventListener("keydown", function (e) { if (e.key === "Escape" && $("toast") && !$("toast").hidden && !document.querySelector(".dialog-wrap:not([hidden])")) hideToast(); });
-  document.addEventListener("click", function (e) { if (e.target.closest(".toast-x")) hideToast(); });
+  function hideToast() { OB.hideToast(); }
   document.addEventListener("click", function (e) {
     var rb = e.target.closest("[data-refer]");
     if (rb) { openRefer(rb.getAttribute("data-refer")); return; }
-    var ub = e.target.closest("[data-undo]");
-    if (ub) {
-      S.undoReferral(ub.getAttribute("data-undo"), { by: "Pathways" + (lastInitials() ? ": " + lastInitials() : "") });
-      toast("Referral undone. The bed is back on the board.");
-    }
   });
 
   // ---------- tabs ----------
@@ -772,14 +911,18 @@
     var all = S.boardSites();
     var sites = all.filter(passesFilters);
     var latest = all.filter(function (s) { return !s.noReport; }).map(function (s) { return new Date(s.report.receivedAt); }).sort(function (a, b) { return b - a; })[0];
-    $("board-meta").textContent = "Live · " + all.length + " sites · last update " + (latest ? OB.when(latest.toISOString()).label : "none");
+    $("board-meta").textContent = "Live · " + plural(all.length, "facility", "facilities") + " · last update " + (latest ? OB.when(latest.toISOString()).label : "none");
+    noteChanges(all);
+    renderStale(latest);
+    $("results").classList.toggle("compact", $("f-compact").checked);
     TABS.forEach(function (t) {
       var on = state.view === t[0];
       $(t[1]).setAttribute("aria-selected", on);
       $(t[1]).tabIndex = on ? 0 : -1;
       $(t[2]).hidden = !on;
     });
-    renderTiles(sites);
+    renderCounts(sites);
+    renderChips(plural(sites.length, "facility", "facilities") + " match");
     if (state.view === "find") {
       $("find-list").hidden = state.mode !== "list";
       $("find-map").hidden = state.mode !== "map";
@@ -787,6 +930,8 @@
     }
     else if (state.view === "grid") renderGrid(sites);
     else renderUpdates();
+    applyFlash();
+    saveState();
   }
 
   buildSeg("f-type", "f-type", TYPE_OPTS, "type");
@@ -873,7 +1018,10 @@
   $("f-fresh").addEventListener("change", function (e) { state.recentOnly = e.target.checked; render(); });
   $("f-sort").addEventListener("change", function (e) { state.sort = e.target.value; render(); });
   setupTabs();
-  S.subscribe(render);
+  syncControls();
+  setMore(activeFilters().some(function (f) { return !f.main && f.key !== "origin"; }));
+  applyFilterLayout();
+  S.subscribe(function () { storeTick = true; render(); });
   setInterval(render, 60000);
   render();
 })();

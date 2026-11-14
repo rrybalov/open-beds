@@ -13,7 +13,7 @@
 (function (root) {
   "use strict";
   var OB = root.OB, esc = OB.esc;
-  var SEX_COL = { male: "Male", female: "Female", any: "Open beds" };
+  var SEX_COL = { male: "Men", female: "Women", any: "Open beds" };
 
   var ALL_TYPES = ["detox", "residential", "php"];
   function fullLayout(site) {
@@ -81,11 +81,12 @@
     var canGrow = opts.expandable !== false && !opts.full && !isFull(site, layout);
     var grow = canGrow ? '<button type="button" class="linkbtn grow-btn" data-expand>Add a bed type or split by men / women<span class="sr"> at ' + esc(site.name) + "</span></button>" : "";
     var fullHint = opts.full && layout.some(function (b) { return b.type === "shared"; }) ? '<p class="help" style="margin:6px 0 0">Splitting detox and rehab now? Leave “Detox or rehab” blank and fill the separate rows.</p>' : "";
-    var copy = opts.mode === "provider" && cur ? '<button type="button" class="btn small" data-copy="' + esc(site.id) + '">Same as last update</button>' : "";
+    var copy = opts.mode === "provider" && cur ? '<button type="button" class="btn small" data-copy="' + esc(site.id) + '">No change — confirm last counts<span class="sr"> at ' + esc(site.name) + "</span></button>" : "";
     return '<section class="site-edit" data-site="' + esc(site.id) + '" data-prefix="' + esc(opts.prefix) + '" data-mode="' + esc(opts.mode) + '" data-full="' + (opts.full ? "1" : "0") + '"><div class="site-edit-h"><h3>' + esc(site.name) +
       (site.fullName && site.fullName !== site.name ? ' <span class="full-name">' + esc(site.fullName) + "</span>" : "") + "</h3>" + last + "</div>" +
       '<table class="bedtbl"><thead><tr><th scope="col">Bed type</th>' + sexCols.map(function (s) { return '<th scope="col">' + colName(s) + "</th>"; }).join("") + "</tr></thead><tbody>" + rows + "</tbody></table>" + fullHint +
       (grow || copy ? '<div class="site-edit-acts">' + grow + copy + "</div>" : "") +
+      (copy ? '<p class="copied" id="' + p + '-copied" role="status"></p>' : "") +
       '<div class="field" style="margin:10px 0 0"><label class="lbl" for="' + p + '-notes">Note for intake staff <span class="help">(optional)</span></label>' +
       '<input class="input wide" id="' + p + '-notes" type="text" maxlength="160" placeholder="e.g. 2 discharges expected this afternoon" value="' + esc(noteVal) + '"></div>' +
       '<div class="err" id="' + p + '-err" role="alert" hidden></div></section>';

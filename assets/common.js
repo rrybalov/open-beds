@@ -202,14 +202,44 @@
   function plural(n, one, many) { return n + " " + (n === 1 ? one : (many || one + "s")); }
 
   var TYPE_LABEL = { detox: "Detox", residential: "Residential", php: "PHP", outpatient: "Outpatient", shared: "Detox or rehab" };
-  var SEX_LABEL = { male: "Male", female: "Female", any: "All" };
+  var SEX_LABEL = { male: "Men", female: "Women", any: "All" };
 
   // Short text summary of one entry: "Detox 6 M · 3 F; Residential 0 M · 4 F"
+  // Toast with an optional Undo: OB.toast(message, onUndo). Esc or × dismisses it; it stays 12 seconds.
+  var toastTimer = null, toastUndo = null;
+  function toast(msg, onUndo) {
+    var t = document.getElementById("toast");
+    if (!t) { t = document.createElement("div"); t.id = "toast"; t.className = "toast"; t.setAttribute("role", "status"); document.body.appendChild(t); }
+    toastUndo = onUndo || null;
+    t.innerHTML = "<span>" + esc(msg) + "</span>" + (onUndo ? '<button type="button" class="linkbtn toast-undo">Undo</button>' : "") +
+      '<button type="button" class="toast-x" aria-label="Dismiss message"><svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>';
+    t.hidden = false;
+    // Focused controls scroll clear of the toast while it shows (WCAG 2.4.11).
+    document.documentElement.style.scrollPaddingBottom = "96px";
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(hideToast, 12000);
+  }
+  function hideToast() {
+    var t = document.getElementById("toast");
+    if (t) t.hidden = true;
+    toastUndo = null;
+    document.documentElement.style.scrollPaddingBottom = "";
+  }
+  document.addEventListener("keydown", function (e) { var t = document.getElementById("toast"); if (e.key === "Escape" && t && !t.hidden && !document.querySelector(".dialog-wrap:not([hidden])")) hideToast(); });
+  document.addEventListener("click", function (e) {
+    if (e.target.closest(".toast-x")) { hideToast(); return; }
+    if (e.target.closest(".toast-undo") && toastUndo) {
+      var fn = toastUndo; hideToast(); fn();
+      var x = document.querySelector("#toast:not([hidden]) .toast-x"); if (x) x.focus();
+    }
+  });
+
   function entrySummary(e) {
     var parts = [];
     Object.keys(e.counts || {}).forEach(function (t) {
       var c = e.counts[t];
-      var sx = Object.keys(c).map(function (k) { var v = c[k] === "na" ? "NA" : c[k]; return k === "any" ? String(v) : v + " " + k.charAt(0).toUpperCase(); });
+      var keys = Object.keys(c);
+      var sx = keys.map(function (k) { var v = c[k] === "na" ? "NA" : c[k]; return k === "male" ? "men " + v : k === "female" ? "women " + v : keys.length > 1 ? "sex not given " + v : String(v); });
       parts.push((TYPE_LABEL[t] || t) + " " + sx.join(" · "));
     });
     if (e.shared) parts.push(e.shared.open + " " + (e.shared.label || "detox or rehab"));
@@ -217,5 +247,5 @@
     return parts.join("; ") || "No counts";
   }
 
-  root.OB = { esc: esc, when: when, timeOf: timeOf, sourceChip: sourceChip, sourceLink: sourceLink, sourceText: sourceText, openDialog: openDialog, keepFocus: keepFocus, setBehindInert: setBehindInert, remembered: remembered, remember: remember, closeDialog: function () { if (dlg) closeSource(); }, SOURCE: SOURCE, ICON: ICON, plural: plural, TYPE_LABEL: TYPE_LABEL, SEX_LABEL: SEX_LABEL, entrySummary: entrySummary, TZ: TZ };
+  root.OB = { esc: esc, when: when, timeOf: timeOf, sourceChip: sourceChip, sourceLink: sourceLink, sourceText: sourceText, openDialog: openDialog, keepFocus: keepFocus, setBehindInert: setBehindInert, remembered: remembered, remember: remember, closeDialog: function () { if (dlg) closeSource(); }, SOURCE: SOURCE, ICON: ICON, plural: plural, TYPE_LABEL: TYPE_LABEL, SEX_LABEL: SEX_LABEL, entrySummary: entrySummary, toast: toast, hideToast: hideToast, TZ: TZ };
 })(window);

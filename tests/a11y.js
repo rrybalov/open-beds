@@ -288,6 +288,12 @@ async function textSpacing(page) {
   await p.selectOption('#org', '__new'); await scan(p, 'Update · new provider');
   await p.check('#confirm'); await p.click('#submit'); await scan(p, 'Update · errors shown');
   record('Update · text spacing', await textSpacing(p));
+  // Multi-facility provider: collapsed facilities, jump list, confirm, review dialog
+  p = await open('update.html?org=acadia'); await scan(p, 'Update · collapsed facilities + jump list');
+  record('Update · multi keyboard', (await focusPass(p, 'Update multi', 80)).issues);
+  await p.click('[data-jump="bradford"]'); await p.click('#sbody-bradford [data-copy]'); await scan(p, 'Update · confirmed last counts');
+  await p.check('#confirm'); await p.click('#submit'); await scan(p, 'Update · review dialog'); record('Update · review dialog', await dialogTrap(p, 'Review dialog'));
+  await p.keyboard.press('Escape');
 
   // Admin
   p = await open('admin.html');
@@ -304,7 +310,7 @@ async function textSpacing(page) {
   for (const path of ['index.html', 'update.html?org=acadia', 'admin.html']) {
     const m = await open(path, 390, 844); await scan(m, 'Phone 390 · ' + path);
     const r = await open(path, 320, 640); record('Reflow 320 · ' + path, await reflow(r, path));
-    if (path === 'index.html') { await r.click('#f-loc-btn'); record('Reflow 320 · locations', await reflow(r, 'loc')); await r.keyboard.press('Escape'); await r.click('#card-cove-forge [data-refer]'); record('Reflow 320 · referral dialog', await reflow(r, 'dlg')); }
+    if (path === 'index.html') { await r.click('#filters-toggle'); await r.click('#f-loc-btn'); record('Reflow 320 · locations', await reflow(r, 'loc')); await r.keyboard.press('Escape'); await r.click('#card-cove-forge [data-refer]'); record('Reflow 320 · referral dialog', await reflow(r, 'dlg')); }
   }
   await b.close();
 
