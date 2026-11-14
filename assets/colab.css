@@ -323,3 +323,11 @@ select.input, select.sel-in, .sel-in {
 #map-msg:empty { display: none; }
 @media (max-width: 760px) { .contact-btns .refer-btn { margin-left: 0; } }
 .contact-btns .refer-btn { margin-top: 0; }
+/* Review fixes: grid update cell spacing, static text not styled as links, disclosure marker */
+.grid .grid-tel { display: flex; width: fit-content; margin-top: 2px; }
+.grid td .linkbtn { display: flex; width: fit-content; }
+.grid .grid-lv { color: var(--slate); font-weight: 400; font-size: 12px; }
+details.sim summary { justify-content: space-between; }
+details.sim summary::after { content: ""; width: 8px; height: 8px; border-right: 2px solid var(--slate); border-bottom: 2px solid var(--slate); transform: rotate(-45deg); margin-right: 4px; }
+details.sim[open] summary::after { content: ""; transform: rotate(45deg); }
+.grid .site-name .grid-lv { color: var(--slate); font-weight: 400; }
