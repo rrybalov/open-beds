@@ -1,7 +1,8 @@
 /*
  * Open Beds — facility details editor, shared by the provider form and the admin page.
  * Lets a provider (or DHS) keep a facility's profile current: levels of care, who they take
- * and don't, what they need before admission, situation-specific context, payment, contact.
+ * and don't, who they serve, intake and walk-in hours, what they need before admission,
+ * situation-specific context, payment, contact.
  *
  *   OpenBedsProfile.fields(site, prefix, {open})  → HTML (a <details> panel)
  *   OpenBedsProfile.read(site, prefix)            → { fit, reach, changes: [plain-English lines], errors }
@@ -35,7 +36,15 @@
   function fields(site, p, opts) {
     opts = opts || {};
     var h = "h" + (opts.h || 4);
-    var f = site.fit || {}, r = site.reach || {}, pol = f.policies || {}, pay = f.pay || {};
+    var f = site.fit || {}, r = site.reach || {}, pol = f.policies || {}, pay = f.pay || {}, hrs = f.hours || {};
+    function yesNo(id, label, v) {
+      var cur = v === true ? "yes" : v === false ? "no" : "";
+      return '<div class="field pay-field"><label class="lbl" for="' + id + '">' + esc(label) + '</label><select id="' + id + '" class="sel-in">' +
+        PAY_CHOICES.map(function (c) { return '<option value="' + c[0] + '"' + (c[0] === cur ? " selected" : "") + ">" + c[1] + "</option>"; }).join("") + "</select></div>";
+    }
+    var popRows = S.sites.populations.map(function (t) { return yesNo(p + "-pop-" + t[0], t[1], (f.populations || {})[t[0]]); }).join("");
+    var accRows = S.sites.access.map(function (t) { return yesNo(p + "-acc-" + t[0], t[1], (f.access || {})[t[0]]); }).join("");
+    var langVal = Array.isArray(f.languages) ? (f.languages.length ? f.languages.join(", ") : "English only") : "";
     var lv = S.sites.levels.map(function (l) {
       return '<label class="check"><input type="checkbox" name="' + p + '-lv" value="' + esc(l[0]) + '"' + ((f.levels || []).indexOf(l[0]) > -1 ? " checked" : "") + "> " + esc(l[1]) + ' <span class="help">' + esc(l[2]) + "</span></label>";
     }).join("");
@@ -57,6 +66,11 @@
       area(p + "-req", "Needed before admission", "(one per line)", (f.requires || []).join("\n"), "e.g. Negative TB test") + "</div>" +
       '<' + h + ' class="form-sub">Specific situations</' + h + '><p class="help" style="margin:-4px 0 8px">Intake asks about these on most calls. Leave blank if it depends — staff will ask.</p>' +
       '<div class="row2">' + TOPICS.map(function (t) { return text(p + "-pol-" + t[0], t[1], "", pol[t[0]], "text", t[2]); }).join("") + "</div>" +
+      '<' + h + ' class="form-sub">Populations you serve</' + h + '><p class="help" style="margin:-4px 0 8px">Intake filters on these. “Not sure” shows as not on file.</p><div class="pay-grid">' + popRows + "</div>" +
+      text(p + "-langs", "Languages other than English", "(comma-separated; “English only” if none)", langVal, "text", "e.g. Spanish, American Sign Language") +
+      '<' + h + ' class="form-sub">Intake and walk-in hours</' + h + '>' +
+      '<div class="row2">' + text(p + "-hintake", "Intake hours", "", hrs.intake, "text", "e.g. Mon–Fri 8 AM–4 PM") + text(p + "-hwalkin", "Walk-in hours", "(if you take walk-ins)", hrs.walkin, "text", "e.g. Mon–Fri 8–11 AM") + "</div>" +
+      '<div class="pay-grid">' + accRows + "</div>" +
       '<' + h + ' class="form-sub">Payment</' + h + '><div class="pay-grid">' + payRows + "</div>" +
       text(p + "-payer", "Payment notes", "(optional)", f.payer, "text", "e.g. Pre-certification handled by us") +
       area(p + "-notes", "Admissions notes", "(one per line)", (f.notes || []).join("\n"), "e.g. Admissions until 9 PM; call ahead after 5") +
@@ -85,10 +99,21 @@
     TOPICS.forEach(function (t) { if (val(p + "-pol-" + t[0])) pol[t[0]] = val(p + "-pol-" + t[0]); });
     S.sites.payTypes.forEach(function (t) { var v = $(p + "-pay-" + t[0]).value; if (v) pay[t[0]] = v === "yes"; });
     if (val(p + "-email") && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(val(p + "-email"))) errors.push(site.name + ": check the intake email.");
+    function ynMap(list, key) {
+      var out = {};
+      list.forEach(function (t) { var el = $(p + "-" + key + "-" + t[0]); if (el && el.value) out[t[0]] = el.value === "yes"; });
+      return out;
+    }
+    var populations = ynMap(S.sites.populations, "pop"), access = ynMap(S.sites.access, "acc");
+    var langRaw = val(p + "-langs"), languages;
+    if (/^english only$/i.test(langRaw)) languages = [];
+    else if (langRaw) languages = langRaw.split(/[,;]/).map(function (x) { return x.trim(); }).filter(Boolean);
+    var hours = {}; if (val(p + "-hintake")) hours.intake = val(p + "-hintake"); if (val(p + "-hwalkin")) hours.walkin = val(p + "-hwalkin");
     var fit = Object.assign({}, f0, {
       levels: levels, levelsNote: val(p + "-lvnote") || undefined, serves: val(p + "-serves") || undefined,
       takes: lines(p + "-takes"), excludes: lines(p + "-excl"), requires: lines(p + "-req"), notes: lines(p + "-notes"),
-      policies: pol, pay: pay, payer: val(p + "-payer") || undefined
+      policies: pol, pay: pay, payer: val(p + "-payer") || undefined,
+      populations: populations, access: access, languages: languages, hours: hours
     });
     // Topics with an answer count as "on file" on the board.
     fit.known = (f0.known || []).slice();
@@ -110,6 +135,18 @@
       var a = (f0.pay || {})[t[0]], b = pay[t[0]];
       if (a !== b) ch.push(t[1] + ": " + (b === true ? "yes" : b === false ? "no" : "not sure") + (a !== undefined ? " (was " + (a ? "yes" : "no") + ")" : ""));
     });
+    function ynDiff(list, a, b) {
+      list.forEach(function (t) {
+        var x = (a || {})[t[0]], y = (b || {})[t[0]];
+        if (x !== y) ch.push(t[1] + ": " + (y === true ? "yes" : y === false ? "no" : "not sure") + (x !== undefined ? " (was " + (x ? "yes" : "no") + ")" : ""));
+      });
+    }
+    ynDiff(S.sites.populations, f0.populations, populations);
+    var la = Array.isArray(f0.languages) ? (f0.languages.length ? f0.languages.join(", ") : "English only") : "", lb = Array.isArray(languages) ? (languages.length ? languages.join(", ") : "English only") : "";
+    textDiff("Languages", la, lb, ch);
+    textDiff("Intake hours", (f0.hours || {}).intake, hours.intake, ch);
+    textDiff("Walk-in hours", (f0.hours || {}).walkin, hours.walkin, ch);
+    ynDiff(S.sites.access, f0.access, access);
     textDiff("Payment notes", f0.payer, fit.payer, ch);
     listDiff("Admissions notes", f0.notes, fit.notes, ch);
     textDiff("Address", r0.address, reach.address, ch);

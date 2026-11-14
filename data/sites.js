@@ -199,6 +199,32 @@
     ["21", "2.1", "Intensive outpatient (IOP)"], ["1", "1", "Outpatient"]
   ];
 
+  // Who a facility serves and when it does intake (the filters LA County's SBAT offers).
+  // In each facility's fit: populations / access = { key: true | false } (missing = not on file),
+  // languages = [] (an array, even empty, means the provider has told us), hours = { intake, walkin }.
+  OPEN_BEDS_SITES.populations = [
+    ["pregnant", "Pregnant or parenting women", "pregnant and parenting women"],
+    ["cooccurring", "Co-occurring mental health", "co-occurring mental health"],
+    ["moud", "Continues MOUD (methadone, buprenorphine)", "people on MOUD"],
+    ["justice", "Justice-involved", "justice-involved people"],
+    ["unhoused", "Experiencing homelessness", "people experiencing homelessness"],
+    ["veterans", "Veterans", "veterans"],
+    ["lgbtq", "LGBTQIA+", "LGBTQIA+ people"],
+    ["disability", "People with disabilities", "people with disabilities"]
+  ];
+  OPEN_BEDS_SITES.access = [
+    ["walkin", "Walk-in intake", "walk-in intake"],
+    ["evening", "Intake after 5 PM", "evening intake"],
+    ["weekend", "Weekend intake", "weekend intake"],
+    ["allday", "Admits 24/7", "24/7 admissions"]
+  ];
+  OPEN_BEDS_SITES.languages = ["Spanish", "American Sign Language", "Arabic", "Chinese", "French", "Haitian Creole", "Nepali", "Russian", "Swahili", "Ukrainian", "Vietnamese"];
+  // The little we know from the emails and the worksheet; everything else is "not on file" until providers fill it in.
+  (function () {
+    var known = { "silvermist-pgh": { populations: { cooccurring: true } }, "gaiser": { populations: { moud: true } } };
+    OPEN_BEDS_SITES.sites.forEach(function (s) { if (known[s.id]) Object.assign(s.fit, known[s.id]); });
+  })();
+
   if (typeof module !== "undefined" && module.exports) module.exports = OPEN_BEDS_SITES;
   else root.OPEN_BEDS_SITES = OPEN_BEDS_SITES;
 })(typeof window !== "undefined" ? window : this);

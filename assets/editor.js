@@ -32,6 +32,7 @@
     return sec && sec.getAttribute("data-full") === "1" ? fullLayout(site) : site.beds;
   }
 
+  function fmtDay(iso) { var d = new Date(iso + "T12:00:00"); return isNaN(d) ? iso : d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }); }
   function valStr(v) { return v === undefined || v === null ? "" : v === "na" ? "NA" : String(v); }
 
   function siteBlock(site, cur, opts) {
@@ -78,6 +79,11 @@
       ? '<span class="last">Last update ' + esc(OB.when(cur.report.receivedAt).label) + " " + OB.sourceChip(cur.report.source) + "</span>"
       : '<span class="last">No update yet</span>';
     var noteVal = opts.mode === "admin" && e && e.notes ? e.notes.join("; ") : "";
+    // Next intake appointment: a date, kept until the provider changes it.
+    var lastIntake = e && e.nextIntake ? e.nextIntake : "";
+    var intake = '<div class="field intake-field" style="margin:10px 0 0"><label class="lbl" for="' + p + '-intake">Next open intake appointment <span class="help">(optional' +
+      (opts.mode === "provider" && lastIntake ? "; last: " + esc(fmtDay(lastIntake)) : "") + ")</span></label>" +
+      '<input class="input" id="' + p + '-intake" type="date" value="' + esc(opts.mode === "admin" ? lastIntake : "") + '"></div>';
     var canGrow = opts.expandable !== false && !opts.full && !isFull(site, layout);
     var grow = canGrow ? '<button type="button" class="linkbtn grow-btn" data-expand>Add a bed type or split by men / women<span class="sr"> at ' + esc(site.name) + "</span></button>" : "";
     var fullHint = opts.full && layout.some(function (b) { return b.type === "shared"; }) ? '<p class="help" style="margin:6px 0 0">Splitting detox and rehab now? Leave “Detox or rehab” blank and fill the separate rows.</p>' : "";
@@ -87,6 +93,7 @@
       '<table class="bedtbl"><thead><tr><th scope="col">Bed type</th>' + sexCols.map(function (s) { return '<th scope="col">' + colName(s) + "</th>"; }).join("") + "</tr></thead><tbody>" + rows + "</tbody></table>" + fullHint +
       (grow || copy ? '<div class="site-edit-acts">' + grow + copy + "</div>" : "") +
       (copy ? '<p class="copied" id="' + p + '-copied" role="status"></p>' : "") +
+      intake +
       '<div class="field" style="margin:10px 0 0"><label class="lbl" for="' + p + '-notes">Note for intake staff <span class="help">(optional)</span></label>' +
       '<input class="input wide" id="' + p + '-notes" type="text" maxlength="160" placeholder="e.g. 2 discharges expected this afternoon" value="' + esc(noteVal) + '"></div>' +
       '<div class="err" id="' + p + '-err" role="alert" hidden></div></section>';
@@ -128,6 +135,8 @@
         any = true;
       });
     });
+    var intakeEl = document.getElementById(p + "-intake");
+    if (intakeEl && intakeEl.value && intakeEl.value !== (opts.was || "")) { entry.nextIntake = intakeEl.value; any = true; }
     var note = document.getElementById(p + "-notes").value.trim();
     if (note) entry.notes.push(note);
     var errEl = document.getElementById(p + "-err");
@@ -157,5 +166,5 @@
     (firstNew || fresh.querySelector("input")).focus();
   });
 
-  root.OpenBedsEditor = { siteBlock: siteBlock, readSite: readSite, fullLayout: fullLayout };
+  root.OpenBedsEditor = { siteBlock: siteBlock, readSite: readSite, fullLayout: fullLayout, fmtDay: fmtDay };
 })(window);

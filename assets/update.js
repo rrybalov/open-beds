@@ -60,7 +60,7 @@
   }
   function statusOf(id) {
     var body = $("sbody-" + id), n = 0;
-    Array.prototype.forEach.call(body.querySelectorAll(".site-edit .num-in, .site-edit select"), function (el) { if (el.value.trim()) n++; });
+    Array.prototype.forEach.call(body.querySelectorAll(".site-edit .num-in, .site-edit select, .site-edit input[type=date]"), function (el) { if (el.value.trim()) n++; });
     var note = body.querySelector('.site-edit input[id$="-notes"]');
     var bits = [];
     if (confirmed[id] && confirmed[id].sig === countSig(id)) bits.push("Last counts confirmed");
@@ -70,7 +70,7 @@
     return bits.length ? bits.join(" · ") : "Not updated";
   }
   function countSig(id) {
-    return Array.prototype.map.call($("sbody-" + id).querySelectorAll(".site-edit .num-in, .site-edit select"), function (el) { return el.id + "=" + el.value.trim(); }).join("|");
+    return Array.prototype.map.call($("sbody-" + id).querySelectorAll(".site-edit .num-in, .site-edit select, .site-edit input[type=date]"), function (el) { return el.id + "=" + el.value.trim(); }).join("|");
   }
   function refreshStatus(id) {
     var t = statusOf(id), done = t !== "Not updated";

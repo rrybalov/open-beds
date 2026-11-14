@@ -268,6 +268,9 @@ async function textSpacing(page) {
   await p.keyboard.press('Escape');
   await p.click('#card-cove-forge [data-refer]'); await scan(p, 'Board · referral dialog'); record('Board · referral dialog', await dialogTrap(p, 'Referral dialog'));
   await p.click('#card-cove-forge [data-refer]'); await p.click('#refer-form button[type=submit]'); await scan(p, 'Board · toast + referral marked');
+  await p.keyboard.press('Escape');
+  await p.click('#card-cove-forge [data-call]'); await scan(p, 'Board · call update dialog'); record('Board · call dialog', await dialogTrap(p, 'Call update dialog'));
+  await p.click('#more-btn'); await p.check('#f-serve-pregnant'); await p.check('#f-acc-weekend'); await scan(p, 'Board · who-they-serve filters'); await p.click('#chips [data-clear="all"]'); await p.click('#more-btn');
   await p.click('#card-cove-forge [data-report]'); await scan(p, 'Board · source dialog'); record('Board · source dialog', await dialogTrap(p, 'Source dialog'));
   await p.click('label[for="f-mode-map"]'); await p.fill('#map-q', '15219'); await p.click('#map-form button[type=submit]'); await p.waitForTimeout(200);
   await p.locator('.ml-head').first().click(); await scan(p, 'Board · map + selected');
@@ -310,7 +313,7 @@ async function textSpacing(page) {
   for (const path of ['index.html', 'update.html?org=acadia', 'admin.html']) {
     const m = await open(path, 390, 844); await scan(m, 'Phone 390 · ' + path);
     const r = await open(path, 320, 640); record('Reflow 320 · ' + path, await reflow(r, path));
-    if (path === 'index.html') { await r.click('#filters-toggle'); await r.click('#f-loc-btn'); record('Reflow 320 · locations', await reflow(r, 'loc')); await r.keyboard.press('Escape'); await r.click('#card-cove-forge [data-refer]'); record('Reflow 320 · referral dialog', await reflow(r, 'dlg')); }
+    if (path === 'index.html') { await r.click('#filters-toggle'); await r.click('#f-loc-btn'); record('Reflow 320 · locations', await reflow(r, 'loc')); await r.keyboard.press('Escape'); await r.click('#card-cove-forge [data-refer]'); record('Reflow 320 · referral dialog', await reflow(r, 'dlg')); await r.keyboard.press('Escape'); await r.click('#card-cove-forge [data-call]'); record('Reflow 320 · call dialog', await reflow(r, 'call')); }
   }
   await b.close();
 

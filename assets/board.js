@@ -2,7 +2,7 @@
 (function () {
   "use strict";
 
-  var S = window.OpenBedsStore, OB = window.OB, esc = OB.esc;
+  var S = window.OpenBedsStore, OB = window.OB, ED = window.OpenBedsEditor, esc = OB.esc;
   var REGIONS = S.sites.regions;
   var BED_TYPES = ["detox", "residential", "php", "outpatient"];
   var TYPE_OPTS = [["any", "Any type"], ["detox", "Detox"], ["residential", "Residential"], ["php", "PHP"], ["outpatient", "Outpatient"]];
@@ -11,11 +11,34 @@
   var TYPE_LABEL = OB.TYPE_LABEL;
   var SEX_SHORT = { male: "M", female: "F", any: "" };
 
-  var state = { type: "any", sex: "any", age: "adult", loca: "any", pay: "any", locs: [], sudOnly: false, recentOnly: false, view: "find", mode: "list", sort: "region", origin: null, selected: null };
+  var state = { type: "any", sex: "any", age: "adult", loca: "any", pay: "any", locs: [], sudOnly: false, recentOnly: false, serve: [], access: [], lang: "any", view: "find", mode: "list", sort: "region", origin: null, selected: null };
   var PAY = {};
   S.sites.payTypes.forEach(function (p) { PAY[p[0]] = { label: p[1], short: p[2] }; });
   // true = known to take it, false = known not to, undefined = not on file
   function payStatus(site) { return state.pay === "any" ? undefined : (site.fit.pay || {})[state.pay]; }
+  // Who they serve, intake access, language: true = on file yes, false = on file no, undefined = not on file.
+  var POP = {}, ACC = {};
+  S.sites.populations.forEach(function (t) { POP[t[0]] = { label: t[1], short: t[2] }; });
+  S.sites.access.forEach(function (t) { ACC[t[0]] = { label: t[1], short: t[2] }; });
+  function popStatus(site, k) { return (site.fit.populations || {})[k]; }
+  function accStatus(site, k) {
+    var a = (site.fit.access || {})[k];
+    if (a === undefined && k === "walkin" && (site.fit.hours || {}).walkin) return true;
+    return a;
+  }
+  function langStatus(site) {
+    if (state.lang === "any") return undefined;
+    return Array.isArray(site.fit.languages) ? site.fit.languages.indexOf(state.lang) > -1 : undefined;
+  }
+  // The "who / when / language" filters that are on, each with its status for one facility.
+  function fitChecks(site) {
+    var out = [];
+    state.serve.forEach(function (k) { out.push({ label: POP[k].short, v: popStatus(site, k) }); });
+    state.access.forEach(function (k) { out.push({ label: ACC[k].short, v: accStatus(site, k) }); });
+    if (state.lang !== "any") out.push({ label: state.lang, v: langStatus(site) });
+    return out;
+  }
+  function fitScore(site) { return fitChecks(site).filter(function (c) { return c.v === true; }).length; }
   var LEVEL = {};
   S.sites.levels.forEach(function (l) { LEVEL[l[0]] = { short: l[1], long: l[2] }; });
   var KNOWN = [["pregnancy", "pregnancy"], ["moud", "MOUD"], ["medical", "medical limits"], ["legal", "legal history"]];
@@ -89,6 +112,7 @@
     if (state.recentOnly && (site.noReport || OB.when(site.report.receivedAt).hours >= 24)) return false;
     if (state.loca !== "any" && !((site.fit.levels || []).indexOf(state.loca) > -1)) return false;
     if (state.pay !== "any" && payStatus(site) === false) return false;
+    if (fitChecks(site).some(function (c) { return c.v === false; })) return false;
     if (state.locs.length && state.locs.indexOf(site.id) < 0) return false;
     return true;
   }
@@ -151,7 +175,7 @@
   }
 
   // ---------- active filters: chips, counts, Clear all ----------
-  var DEFAULTS = { type: "any", sex: "any", age: "adult", loca: "any", pay: "any", sudOnly: false, recentOnly: false };
+  var DEFAULTS = { type: "any", sex: "any", age: "adult", loca: "any", pay: "any", sudOnly: false, recentOnly: false, lang: "any" };
   var AGE_WORD = { adolescent: "Adolescents", all: "All ages" };
   function activeFilters() {
     var out = [];
@@ -163,10 +187,15 @@
     if (state.pay !== "any") out.push({ key: "pay", label: PAY[state.pay].short.charAt(0).toUpperCase() + PAY[state.pay].short.slice(1) });
     if (state.sudOnly) out.push({ key: "sudOnly", label: "Substance use treatment only" });
     if (state.recentOnly) out.push({ key: "recentOnly", label: "Confirmed in the last 24 hours" });
+    state.serve.forEach(function (k) { out.push({ key: "serve:" + k, label: POP[k].label }); });
+    state.access.forEach(function (k) { out.push({ key: "access:" + k, label: ACC[k].label }); });
+    if (state.lang !== "any") out.push({ key: "lang", label: "Language: " + state.lang });
     if (state.origin) out.push({ key: "origin", label: "Near " + state.origin.label, main: true });
     return out;
   }
   function clearFilter(key) {
+    if (key.indexOf("serve:") === 0) { state.serve = state.serve.filter(function (k) { return k !== key.slice(6); }); return; }
+    if (key.indexOf("access:") === 0) { state.access = state.access.filter(function (k) { return k !== key.slice(7); }); return; }
     if (key === "locs") state.locs = [];
     else if (key === "origin") { state.origin = null; $("map-q").value = ""; mapMsg(""); if (state.sort === "distance") state.sort = "region"; }
     else state[key] = DEFAULTS[key];
@@ -201,6 +230,9 @@
     syncSeg("f-type", "type"); syncSeg("f-sex", "sex"); syncSeg("f-age", "age"); syncSeg("f-mode", "mode");
     $("f-loca").value = state.loca; $("f-pay").value = state.pay; $("f-sort").value = state.sort;
     $("f-sud").checked = state.sudOnly; $("f-fresh").checked = state.recentOnly;
+    S.sites.populations.forEach(function (t) { $("f-serve-" + t[0]).checked = state.serve.indexOf(t[0]) > -1; });
+    S.sites.access.forEach(function (t) { $("f-acc-" + t[0]).checked = state.access.indexOf(t[0]) > -1; });
+    $("f-lang").value = state.lang;
     $("f-loc-btn").textContent = locLabel();
     var opt = document.querySelector('#f-sort option[value="distance"]');
     opt.disabled = !state.origin;
@@ -239,14 +271,16 @@
   $("f-compact").addEventListener("change", function (e) { OB.remember("compact", e.target.checked ? "1" : ""); render(); });
 
   // ---------- filters live in the URL (shareable, bookmarkable) and are remembered ----------
-  var URL_KEYS = { type: "type", sex: "sex", age: "age", loca: "loca", pay: "pay", view: "view", mode: "mode", sort: "sort", selected: "site" };
-  var URL_DEF = { type: "any", sex: "any", age: "adult", loca: "any", pay: "any", view: "find", mode: "list", sort: "region", selected: null };
+  var URL_KEYS = { type: "type", sex: "sex", age: "age", loca: "loca", pay: "pay", lang: "lang", view: "view", mode: "mode", sort: "sort", selected: "site" };
+  var URL_DEF = { type: "any", sex: "any", age: "adult", loca: "any", pay: "any", lang: "any", view: "find", mode: "list", sort: "region", selected: null };
   function toQuery() {
     var q = new URLSearchParams();
     Object.keys(URL_KEYS).forEach(function (k) { if (state[k] && state[k] !== URL_DEF[k]) q.set(URL_KEYS[k], state[k]); });
     if (state.locs.length) q.set("locs", state.locs.join(","));
     if (state.sudOnly) q.set("sud", "1");
     if (state.recentOnly) q.set("fresh", "1");
+    if (state.serve.length) q.set("serve", state.serve.join(","));
+    if (state.access.length) q.set("access", state.access.join(","));
     if (state.origin) q.set("near", [state.origin.lat.toFixed(4), state.origin.lng.toFixed(4), state.origin.label].join(","));
     return q.toString();
   }
@@ -261,10 +295,13 @@
     if (q.get("locs")) state.locs = q.get("locs").split(",").filter(function (id) { return S.siteById[id]; });
     state.sudOnly = q.get("sud") === "1";
     state.recentOnly = q.get("fresh") === "1";
+    state.serve = (q.get("serve") || "").split(",").filter(function (k) { return POP[k]; });
+    state.access = (q.get("access") || "").split(",").filter(function (k) { return ACC[k]; });
     var near = q.get("near");
     if (near) { var p = near.split(","); if (p.length >= 3 && !isNaN(+p[0])) state.origin = { lat: +p[0], lng: +p[1], label: p.slice(2).join(",") }; }
     if (state.loca !== "any" && !LEVEL[state.loca]) state.loca = "any";
     if (state.pay !== "any" && !PAY[state.pay]) state.pay = "any";
+    if (state.lang !== "any" && S.sites.languages.indexOf(state.lang) < 0) state.lang = "any";
   }
   function saveState() {
     var qs = toQuery();
@@ -386,6 +423,13 @@
   function bedNotes(site) {
     var out = [];
     if (state.pay !== "any") out.push(payStatus(site) === true ? "On file as taking " + PAY[state.pay].short + "." : PAY[state.pay].short + " isn’t on file — ask when you call.");
+    var checks = fitChecks(site), yes = checks.filter(function (c) { return c.v === true; }), unk = checks.filter(function (c) { return c.v === undefined; });
+    if (yes.length) out.push("On file: " + yes.map(function (c) { return c.label; }).join(", ") + ".");
+    if (unk.length) out.push("Not on file: " + unk.map(function (c) { return c.label; }).join(", ") + " \u2014 ask when you call.");
+    if (site.nextIntake) {
+      var past = site.nextIntake < new Date().toLocaleDateString("en-CA", { timeZone: OB.TZ });
+      out.push(past ? "The intake date on file (" + OB.fmtDay(site.nextIntake) + ") has passed \u2014 call to check." : "Next open intake appointment: " + OB.fmtDay(site.nextIntake) + ".");
+    }
     (site.notes || []).forEach(function (n) { out.push("Provider note: " + n); });
     return out.length ? '<ul class="bed-notes">' + out.map(function (n) { return "<li>" + esc(n) + "</li>"; }).join("") + "</ul>" : "";
   }
@@ -427,6 +471,9 @@
     if (site.shared && site.shared.open > 0) out.push({ type: "shared", sex: "any", n: site.shared.open });
     return out.sort(function (a, b) { return order.indexOf(a.type) - order.indexOf(b.type); });
   }
+  function callButton(site) {
+    return '<button type="button" class="cbtn call-btn" data-call="' + esc(site.id) + '" aria-haspopup="dialog">Update from call<span class="sr"> to ' + esc(site.name) + "</span></button>";
+  }
   function referButton(site) {
     if (site.noReport || !referOptions(site).length) return "";
     return '<button type="button" class="cbtn refer-btn" data-refer="' + esc(site.id) + '" aria-haspopup="dialog">Mark a referral<span class="sr"> to ' + esc(site.name) + "</span></button>";
@@ -448,9 +495,20 @@
     (f.requires || []).forEach(function (x) { rows.push(["Requires", esc(x)]); });
     if (f.takes && f.takes.length) rows.push(["Takes", esc(f.takes.join(" · "))]);
     KNOWN.forEach(function (k) { var t = (f.policies || {})[k[0]]; if (t) rows.push([k[1].charAt(0).toUpperCase() + k[1].slice(1), esc(t)]); });
+    var popYes = S.sites.populations.filter(function (t) { return (f.populations || {})[t[0]] === true; }).map(function (t) { return t[2]; });
+    var popNo = S.sites.populations.filter(function (t) { return (f.populations || {})[t[0]] === false; }).map(function (t) { return t[2]; });
+    if (popYes.length) rows.push(["Experienced with", esc(popYes.join(" \u00b7 "))]);
+    if (popNo.length) rows.push(["Doesn\u2019t serve", esc(popNo.join(" \u00b7 "))]);
+    if (Array.isArray(f.languages)) rows.push(["Languages", esc(["English"].concat(f.languages).join(" \u00b7 "))]);
+    var hrs = f.hours || {};
+    if (hrs.intake) rows.push(["Intake hours", esc(hrs.intake)]);
+    if (hrs.walkin) rows.push(["Walk-in hours", esc(hrs.walkin)]);
+    var accYes = S.sites.access.filter(function (t) { return (f.access || {})[t[0]] === true; }).map(function (t) { return t[2]; });
+    if (accYes.length) rows.push(["Intake", esc(accYes.join(" \u00b7 "))]);
     if (f.payer) rows.push(["Payment", esc(f.payer)]);
     (f.notes || []).forEach(function (x) { rows.push(["Admissions", esc(x)]); });
     var missing = KNOWN.filter(function (k) { return (f.known || []).indexOf(k[0]) < 0; }).map(function (k) { return k[1]; });
+    if (!hrs.intake && !hrs.walkin && !accYes.length) missing.push("intake hours");
     if (missing.length) rows.push(["Not on file", '<span class="fit-none">' + esc(missing.join(" · ")) + " — ask when you call</span>"]);
     return '<div class="fit"><p class="fit-h">Who they take</p><dl>' + rows.map(function (r) { return "<dt>" + r[0] + "</dt><dd>" + r[1] + "</dd>"; }).join("") + "</dl>" +
       "</div>";
@@ -496,7 +554,7 @@
     if (!r.phone) notes.push("No phone on file.");
     // Mark a referral sits at the right end of the same row.
     var nid = (where || "cn") + "-" + site.id, open = !!openNotes[nid];
-    return '<div class="contact"><p class="contact-h">Contact admissions</p><div class="contact-btns">' + bits.join("") + referButton(site) + "</div>" +
+    return '<div class="contact"><p class="contact-h">Contact admissions</p><div class="contact-btns">' + bits.join("") + callButton(site) + referButton(site) + "</div>" +
       '<button type="button" class="linkbtn note-btn" aria-expanded="' + open + '" aria-controls="' + nid + '">Where these contacts came from<span class="sr"> — ' + esc(site.name) + "</span></button>" +
       '<p class="contact-note" id="' + nid + '"' + (open ? "" : " hidden") + ">" + esc(notes.join(" ")) + "</p></div>";
   }
@@ -525,6 +583,7 @@
   function sorter(a, b) {
     var sa = a.site, sb = b.site, na = a.a.n || 0, nb = b.a.n || 0;
     if (state.pay !== "any") { var pa = payStatus(sa) === true, pb = payStatus(sb) === true; if (pa !== pb) return pa ? -1 : 1; }
+    var fa = fitScore(sa), fb = fitScore(sb); if (fa !== fb) return fb - fa;
     if (state.sort === "distance" && state.origin) return (distOf(sa) - distOf(sb)) || (nb - na);
     if (state.sort === "count") return (nb - na) || (regionOrder(sa) - regionOrder(sb));
     if (state.sort === "recent") return (new Date(sb.report.receivedAt) - new Date(sa.report.receivedAt)) || (nb - na);
@@ -577,6 +636,13 @@
       var no = S.boardSites().filter(function (s) { return (s.fit.pay || {})[state.pay] === false; }).length;
       foot.push(plural(yes, "facility", "facilities") + " on file as taking " + esc(PAY[state.pay].short) + " " + (yes === 1 ? "is" : "are") + " listed first. Payment isn’t on file for the rest — ask when you call." +
         (no ? " " + plural(no, "facility", "facilities") + " that " + (no === 1 ? "doesn’t" : "don’t") + " take it " + (no === 1 ? "is" : "are") + " hidden." : ""));
+    }
+    if (state.serve.length || state.access.length || state.lang !== "any") {
+      var shownF = rows.filter(function (r) { return r.a.state !== "none"; });
+      var all = shownF.filter(function (r) { return fitChecks(r.site).every(function (c) { return c.v === true; }); }).length;
+      var hidden = S.boardSites().filter(function (x) { return fitChecks(x).some(function (c) { return c.v === false; }); }).length;
+      foot.push(plural(all, "facility", "facilities") + " on file for everything you picked " + (all === 1 ? "is" : "are") + " listed first. Most providers haven\u2019t filled this in yet \u2014 ask when you call." +
+        (hidden ? " " + plural(hidden, "facility", "facilities") + " that said no " + (hidden === 1 ? "is" : "are") + " hidden." : ""));
     }
     if (foot.length) html += '<p class="footnote">' + foot.join(" ") + "</p>";
     $("find-list").innerHTML = html;
@@ -887,6 +953,61 @@
       toast("Referral marked: " + site.name + ", " + optLabel(o).split(" · ")[0].toLowerCase() + " now " + (o.n - 1) + " open.", r.id);
     });
   }
+  // "The board was wrong": after a call, intake records what the provider said, so the next person sees it.
+  function openCall(siteId) {
+    var site = S.boardSites().filter(function (x) { return x.id === siteId; })[0], prof = S.siteById[siteId];
+    if (!site || !prof) return;
+    var cur = S.current({ adjusted: true })[siteId];
+    var html = '<form id="call-form" novalidate><div class="srcdlg-h"><h2 id="call-h">What did ' + esc(site.name) + " tell you?</h2></div>" +
+      '<p class="hint">Record what you heard on the call so the next person sees the right count. Don\u2019t enter client names or details.</p>' +
+      '<fieldset class="refer-opts"><legend class="lbl">Was the board right?</legend>' +
+      '<label class="refer-opt"><input type="radio" name="call-right" value="no" checked> No \u2014 the board was wrong</label>' +
+      '<label class="refer-opt"><input type="radio" name="call-right" value="yes"> Yes \u2014 same as the board</label></fieldset>' +
+      '<div id="call-edit"><p class="hint" style="margin:8px 0">Change only what\u2019s different. <button type="button" class="linkbtn" id="call-full">They\u2019re full \u2014 set every count to 0</button></p>' +
+      ED.siteBlock(prof, cur, { prefix: "cu", mode: "admin" }) + "</div>" +
+      '<div class="row2"><div class="field"><label class="lbl" for="call-who">Who you spoke with <span class="help">(role, optional)</span></label><input id="call-who" class="input wide" maxlength="40" autocomplete="off" placeholder="e.g. Admissions nurse"></div>' +
+      '<div class="field"><label class="lbl" for="call-by">Your initials <span class="help">(optional)</span></label><input id="call-by" class="input" maxlength="6" autocomplete="off" value="' + esc(lastInitials()) + '"></div></div>' +
+      '<div class="err" id="call-err" role="alert" hidden></div>' +
+      '<div class="btnrow"><button type="submit" class="btn primary">Update the board</button><button type="button" class="btn" data-close>Cancel</button></div></form>';
+    var el = OB.openDialog(html, "call-h");
+    el.querySelector("#call-form").addEventListener("change", function (e) {
+      if (e.target.name === "call-right") el.querySelector("#call-edit").hidden = e.target.value === "yes";
+    });
+    el.querySelector("#call-full").addEventListener("click", function () {
+      Array.prototype.forEach.call(el.querySelectorAll("#call-edit .num-in"), function (x) { if (!/^na$/i.test(x.value.trim())) x.value = "0"; });
+      var first = el.querySelector("#call-edit .num-in"); if (first) first.focus();
+    });
+    el.querySelector("#call-form").addEventListener("submit", function (e) {
+      e.preventDefault();
+      var right = el.querySelector('input[name="call-right"]:checked').value === "yes";
+      var by = el.querySelector("#call-by").value.trim(), who = el.querySelector("#call-who").value.trim();
+      var entry = null, note = "";
+      if (!right) {
+        var res = ED.readSite(prof, { prefix: "cu" });
+        var err = el.querySelector("#call-err");
+        if (res.errors.length || !res.entry) {
+          err.textContent = res.errors.length ? "Fix the highlighted counts \u2014 use a number or NA." : "Enter what they told you, or choose \u201cYes \u2014 same as the board\u201d.";
+          err.hidden = false;
+          var bad = el.querySelector('[aria-invalid="true"]') || el.querySelector("#call-edit .num-in"); if (bad) bad.focus();
+          return;
+        }
+        entry = res.entry; note = (res.entry.notes || [])[0] || "";
+      }
+      saveInitials(by);
+      var r = S.callUpdate({ siteId: siteId, entry: entry, by: by, spokeWith: who, note: note });
+      OB.closeDialog();
+      var b = document.querySelector('[data-call="' + siteId + '"]'); if (b) b.focus();
+      var corrected = r.call.wasRight === false;
+      OB.toast(corrected ? site.name + " updated from your call." : site.name + " confirmed on your call.", function () {
+        S.reject(r.id, { by: "Pathways" + (by ? ": " + by : "") });
+        OB.toast("Call update removed. The board is back to what it showed before.");
+      });
+    });
+  }
+  document.addEventListener("click", function (e) {
+    var cb = e.target.closest("[data-call]");
+    if (cb) openCall(cb.getAttribute("data-call"));
+  });
   function toast(msg, undoId) {
     OB.toast(msg, undoId ? function () {
       S.undoReferral(undoId, { by: "Pathways" + (lastInitials() ? ": " + lastInitials() : "") });
@@ -957,6 +1078,14 @@
   });
   $("f-pay").innerHTML += S.sites.payTypes.map(function (p) { return '<option value="' + p[0] + '">' + esc(p[1]) + "</option>"; }).join("");
   $("f-pay").addEventListener("change", function (e) { state.pay = e.target.value; render(); });
+  // Who they serve, intake access and language (the filters LA County's SBAT offers).
+  $("f-serve").innerHTML += S.sites.populations.map(function (t) { return '<label class="check"><input type="checkbox" id="f-serve-' + t[0] + '" data-serve="' + t[0] + '"> ' + esc(t[1]) + "</label>"; }).join("");
+  $("f-access").innerHTML += S.sites.access.map(function (t) { return '<label class="check"><input type="checkbox" id="f-acc-' + t[0] + '" data-access="' + t[0] + '"> ' + esc(t[1]) + "</label>"; }).join("");
+  $("f-lang").innerHTML += S.sites.languages.map(function (l) { return '<option value="' + esc(l) + '">' + esc(l) + "</option>"; }).join("");
+  function toggleIn(list, k, on) { list = list.filter(function (x) { return x !== k; }); if (on) list.push(k); return list; }
+  $("f-serve").addEventListener("change", function (e) { var k = e.target.getAttribute("data-serve"); if (k) { state.serve = toggleIn(state.serve, k, e.target.checked); render(); } });
+  $("f-access").addEventListener("change", function (e) { var k = e.target.getAttribute("data-access"); if (k) { state.access = toggleIn(state.access, k, e.target.checked); render(); } });
+  $("f-lang").addEventListener("change", function (e) { state.lang = e.target.value; render(); });
   // ---------- locations multiselect ----------
   // Empty selection = all locations. Grouped by provider; a provider box selects all its sites.
   function locLabel() {

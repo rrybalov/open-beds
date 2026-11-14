@@ -10,8 +10,8 @@
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Ccircle cx=%2712%27 cy=%2712%27 r=%279.5%27 fill=%27none%27 stroke=%27%23262673%27 stroke-width=%272%27 stroke-dasharray=%273 2.4%27/%3E%3Ccircle cx=%2712%27 cy=%2712%27 r=%274.5%27 fill=%27%23262673%27/%3E%3C/svg%3E">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
-  <link rel="stylesheet" href="assets/styles.css?v=202611140430">
-  <link rel="stylesheet" href="assets/colab.css?v=202611140430">
+  <link rel="stylesheet" href="assets/styles.css?v=202611141048">
+  <link rel="stylesheet" href="assets/colab.css?v=202611141048">
 </head>
 <body>
   <a class="skip" href="#results">Skip to results</a>
@@ -81,6 +81,12 @@
             <label class="lbl" for="f-pay">Payment</label>
             <select id="f-pay" class="input"><option value="any">Any payment</option></select>
           </div>
+          <div class="filter-col">
+            <label class="lbl" for="f-lang">Language</label>
+            <select id="f-lang" class="input"><option value="any">Any language</option></select>
+          </div>
+          <fieldset class="filter-col checks serve-col" id="f-serve"><legend class="lbl">Who they serve</legend></fieldset>
+          <fieldset class="filter-col checks" id="f-access"><legend class="lbl">Intake</legend></fieldset>
           <div class="filter-col checks">
             <label class="check"><input type="checkbox" id="f-sud"> Substance use treatment only</label>
             <label class="check"><input type="checkbox" id="f-fresh"> Only confirmed in the last 24 hours</label>
@@ -150,12 +156,13 @@
 </div>
 
 
-  <script src="data/sites.js?v=202611140430"></script>
-  <script src="data/sample-emails.js?v=202611140430"></script>
-  <script src="assets/parser.js?v=202611140430"></script>
-  <script src="assets/store.js?v=202611140430"></script>
-  <script src="assets/common.js?v=202611140430"></script>
+  <script src="data/sites.js?v=202611141048"></script>
+  <script src="data/sample-emails.js?v=202611141048"></script>
+  <script src="assets/parser.js?v=202611141048"></script>
+  <script src="assets/store.js?v=202611141048"></script>
+  <script src="assets/common.js?v=202611141048"></script>
+  <script src="assets/editor.js?v=202611141048"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
-  <script src="assets/board.js?v=202611140430"></script>
+  <script src="assets/board.js?v=202611141048"></script>
 </body>
 </html>

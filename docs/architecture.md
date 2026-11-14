@@ -13,7 +13,7 @@ The board takes counts from three sources and treats them the same way.
 Every change is a **report** in one append-only log:
 
 ```
-report  { id, source: email|form|admin, status: published|review|rejected,
+report  { id, source: email|form|admin|call|referral, status: published|review|rejected,
           receivedAt, orgId, by, reason?, email?: {from, subject, body},
           parse?: {template, confidence, warnings}, entries: [entry] }
 entry   { siteId, counts: { detox: { male: 3, female: "na" } },
@@ -97,3 +97,13 @@ Store: `orgs` (with sender domains), `sites` (profile + bed layout), `reports` (
 - No sign-in. Anyone can open the admin page, but changes affect only their own browser.
 - “Simulate an email” stands in for the alias.
 - **Referrals and added facilities reach only other tabs in the same browser.** “Everyone looking at the dashboard” needs the API above — a static GitHub Pages site has nowhere shared to write.
+
+
+## Phone-call updates ("the board was wrong")
+
+Intake staff record what a provider said on the phone with **Update from call** on a card. It is a report with `source: "call"` and `call: { wasRight, spokeWith }`. "Same as the board" re-confirms the current count; otherwise the entered counts merge over the current entry. Admin can remove it; the board shows it as "on a Pathways call". In production: `POST /api/reports/call` (county SSO), and a reliability measure per facility from how often calls disagree with the board.
+
+## Intake appointments, hours and who a facility serves
+
+- `entry.nextIntake` (ISO date) rides with the counts — providers, DHS and call updates can set it.
+- `fit.populations` / `fit.access` = `{ key: true | false }` (missing = not on file), `fit.languages` (array; empty = English only), `fit.hours = { intake, walkin }`, all editable in Facility details. Keys are listed in `data/sites.js`.

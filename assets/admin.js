@@ -21,7 +21,7 @@
   function liveSites() { return S.sites.sites.filter(function (s) { return !s.pending; }); }
 
   // ---------- updates ----------
-  var FILTERS = [["all", "All"], ["review", "Needs review"], ["email", "Email"], ["form", "Provider form"], ["admin", "DHS"], ["referral", "Referrals"], ["profile", "Facility details"]];
+  var FILTERS = [["all", "All"], ["review", "Needs review"], ["email", "Email"], ["form", "Provider form"], ["admin", "DHS"], ["call", "Pathways calls"], ["referral", "Referrals"], ["profile", "Facility details"]];
   function renderFilter() {
     $("upd-filter").innerHTML = FILTERS.map(function (f) {
       var id = "uf-" + f[0];
@@ -127,6 +127,7 @@
       else if (vb === undefined) lines.push(label.charAt(0).toUpperCase() + label.slice(1) + ": not in this update (was " + (va === "na" ? "N/A" : va) + ")");
       else lines.push(label.charAt(0).toUpperCase() + label.slice(1) + ": " + (va === "na" ? "N/A" : va) + " → " + vb);
     });
+    if ((prev.nextIntake || "") !== (cur.nextIntake || "") && cur.nextIntake) lines.push("Next intake appointment: " + OB.fmtDay(cur.nextIntake));
     return lines.length ? lines : ["No change — same counts confirmed"];
   }
   function howLine(r) {
@@ -135,6 +136,7 @@
     if (r.source === "referral") return "Claimed through the dashboard" + (who ? " by " + who : "");
     if (r.source === "admin") return "Changed manually by DHS" + (who ? " (" + who + ")" : "") + (r.reason ? " — “" + r.reason + "”" : "");
     if (r.source === "form") return "Provider form" + (r.by ? " — " + r.by : "");
+    if (r.source === "call") return (r.call && r.call.wasRight === false ? "Board was wrong \u2014 corrected after a Pathways call" : "Confirmed on a Pathways call") + (who ? " (" + who + ")" : "") + (r.call && r.call.spokeWith ? ", spoke with " + r.call.spokeWith : "");
     return "Email from " + orgShort(r.orgId);
   }
   function siteItems() {
@@ -174,6 +176,7 @@
     if (r.status === "published") {
       if (it.kind === "referral") acts.push('<button type="button" class="linkbtn" data-act="undo" data-id="' + r.id + '">Undo' + forSite + "</button>");
       else if (it.kind === "profile") acts.push('<button type="button" class="linkbtn danger" data-act="reject" data-id="' + r.id + '">Revert' + forSite + "</button>");
+      else if (r.source === "call") acts.push('<button type="button" class="linkbtn danger" data-act="reject" data-id="' + r.id + '">Remove' + forSite + "</button>");
       if (site && !site.pending) acts.push('<button type="button" class="linkbtn" data-fix="' + esc(site.id) + '">Correct counts<span class="sr"> for ' + esc(site.name) + "</span></button>");
     }
     return '<article class="ui-item site-line' + (st ? " off" : "") + '">' +

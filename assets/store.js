@@ -225,13 +225,14 @@
           site.shared = { types: e.shared.types || (layout ? layout.covers : ["detox", "residential"]), open: e.shared.open, label: e.shared.label || (layout && layout.label) || "detox or rehab" };
         }
         site.qualitative = e.qualitative;
+        site.nextIntake = e.nextIntake || null;
         site.notes = e.notes;
         site.sexSplitInferred = (e.flags || []).indexOf("sexSplitInferred") > -1;
         // Confirmed = the provider's latest report. Changed = when the counts last differed from the report before.
         site.confirmedAt = c.report.receivedAt;
         site.changedAt = changedSince(p.id, c);
         if (mine.length) site.changedAt = mine[0].receivedAt;
-        site.report = { id: c.report.id, source: c.report.source, orgId: c.report.orgId, receivedAt: c.report.receivedAt, by: c.report.by, template: c.report.parse && c.report.parse.template, reason: c.report.reason, from: c.report.email && c.report.email.from };
+        site.report = { id: c.report.id, source: c.report.source, orgId: c.report.orgId, receivedAt: c.report.receivedAt, by: c.report.by, template: c.report.parse && c.report.parse.template, reason: c.report.reason, call: c.report.call, from: c.report.email && c.report.email.from };
         return site;
       });
     }
@@ -269,6 +270,7 @@
       out.qualitative = q;
       out.notes = e.notes || [];
       out.flags = [];
+      if (e.nextIntake !== undefined) out.nextIntake = e.nextIntake;
       return out;
     }
     function merged(entries) {
@@ -287,6 +289,21 @@
       input.entries = merged(input.entries);
       var r = { id: uid(), source: "admin", status: "published", receivedAt: nowIso(), orgId: input.orgId, by: "DHS admin" + (input.by ? ": " + input.by : ""), reason: input.reason, entries: input.entries };
       mutate(function (st) { st.reports.push(r); input.entries.forEach(function (e) { growLayout(st, e); }); hydrate(st); });
+      return r;
+    }
+
+    // "The board was wrong": intake heard a different count (or confirmed the same one) on a phone call.
+    // input: { siteId, entry (null = the board was right), by, spokeWith, note }
+    function callUpdate(input) {
+      var cur = current({ adjusted: true })[input.siteId];
+      var entry = !input.entry ? clone(cur ? cur.entry : { siteId: input.siteId, counts: {} }) : mergeEntry(cur && cur.entry, input.entry);
+      var wasRight = !input.entry || !!(cur && countSig(entry) === countSig(cur.entry));
+      entry.siteId = input.siteId;
+      entry.notes = input.note ? [input.note] : (wasRight && cur ? cur.entry.notes || [] : []);
+      var site = siteById[input.siteId];
+      var r = { id: uid(), source: "call", status: "published", receivedAt: nowIso(), orgId: site ? site.org : null,
+        by: "Pathways" + (input.by ? ": " + input.by : ""), call: { wasRight: wasRight, spokeWith: input.spokeWith || "" }, entries: [entry] };
+      mutate(function (st) { st.reports.push(r); growLayout(st, entry); hydrate(st); });
       return r;
     }
 
@@ -367,7 +384,7 @@
     return {
       sites: SITES, siteById: siteById, orgById: orgById,
       reports: reports, current: current, boardSites: boardSites,
-      receiveEmail: receiveEmail, submitForm: submitForm, adminUpdate: adminUpdate, refer: refer, addSite: addSite, addSites: addSites, updateProfile: updateProfile,
+      receiveEmail: receiveEmail, submitForm: submitForm, adminUpdate: adminUpdate, callUpdate: callUpdate, refer: refer, addSite: addSite, addSites: addSites, updateProfile: updateProfile,
       undoReferral: function (id, opts) { decide(id, "undone", opts); },
       publish: function (id, opts) { decide(id, "published", opts); },
       reject: function (id, opts) { decide(id, "rejected", opts); },

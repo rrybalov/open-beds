@@ -28,13 +28,15 @@
     email: { label: "Email", long: "Provider email" },
     form: { label: "Provider form", long: "Provider update form" },
     admin: { label: "DHS update", long: "Updated by DHS staff" },
-    referral: { label: "Referral", long: "Referral marked by Pathways" }
+    referral: { label: "Referral", long: "Referral marked by Pathways" },
+    call: { label: "Phone call", long: "Checked by Pathways on a phone call" }
   };
   var ICON = {
     email: '<svg aria-hidden="true" viewBox="0 0 24 24" width="14" height="14"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>',
     form: '<svg aria-hidden="true" viewBox="0 0 24 24" width="14" height="14"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>',
     admin: '<svg aria-hidden="true" viewBox="0 0 24 24" width="14" height="14"><path d="M12 3 4 6v6c0 4.4 3.4 8.3 8 9 4.6-.7 8-4.6 8-9V6Z"/></svg>',
-    referral: '<svg aria-hidden="true" viewBox="0 0 24 24" width="14" height="14"><path d="M5 12h12M13 6l6 6-6 6"/></svg>'
+    referral: '<svg aria-hidden="true" viewBox="0 0 24 24" width="14" height="14"><path d="M5 12h12M13 6l6 6-6 6"/></svg>',
+    call: '<svg aria-hidden="true" viewBox="0 0 24 24" width="14" height="14"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2Z"/></svg>'
   };
   // How the board says where a count came from, as plain text.
   function sourceText(report, S) {
@@ -42,6 +44,7 @@
     if (report.source === "email") return "from " + org + "’s email";
     if (report.source === "form") return "on " + org + "’s update form";
     if (report.source === "admin") return "by DHS staff" + (report.by && report.by.indexOf(": ") > -1 ? " (" + report.by.split(": ")[1] + ")" : "");
+    if (report.source === "call") return "on a Pathways call" + (report.by && report.by.indexOf(": ") > -1 ? " (" + report.by.split(": ")[1] + ")" : "") + (report.call && report.call.wasRight === false ? " \u2014 board corrected" : "");
     return "";
   }
   // With a report id the chip is a button that opens the source (the email itself, the form submission, or the DHS edit).
@@ -234,6 +237,7 @@
     }
   });
 
+  function fmtDay(iso) { var d = new Date(iso + "T12:00:00"); return isNaN(d) ? iso : d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }); }
   function entrySummary(e) {
     var parts = [];
     Object.keys(e.counts || {}).forEach(function (t) {
@@ -244,8 +248,9 @@
     });
     if (e.shared) parts.push(e.shared.open + " " + (e.shared.label || "detox or rehab"));
     (e.qualitative || []).forEach(function (q) { parts.push(q.label); });
+    if (e.nextIntake) parts.push("next intake " + fmtDay(e.nextIntake));
     return parts.join("; ") || "No counts";
   }
 
-  root.OB = { esc: esc, when: when, timeOf: timeOf, sourceChip: sourceChip, sourceLink: sourceLink, sourceText: sourceText, openDialog: openDialog, keepFocus: keepFocus, setBehindInert: setBehindInert, remembered: remembered, remember: remember, closeDialog: function () { if (dlg) closeSource(); }, SOURCE: SOURCE, ICON: ICON, plural: plural, TYPE_LABEL: TYPE_LABEL, SEX_LABEL: SEX_LABEL, entrySummary: entrySummary, toast: toast, hideToast: hideToast, TZ: TZ };
+  root.OB = { esc: esc, when: when, timeOf: timeOf, sourceChip: sourceChip, sourceLink: sourceLink, sourceText: sourceText, openDialog: openDialog, keepFocus: keepFocus, setBehindInert: setBehindInert, remembered: remembered, remember: remember, closeDialog: function () { if (dlg) closeSource(); }, SOURCE: SOURCE, ICON: ICON, plural: plural, TYPE_LABEL: TYPE_LABEL, SEX_LABEL: SEX_LABEL, entrySummary: entrySummary, fmtDay: fmtDay, toast: toast, hideToast: hideToast, TZ: TZ };
 })(window);
