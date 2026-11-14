@@ -59,7 +59,17 @@
           entries: parsed.entries
         };
       });
-      return { version: 2, seededAt: new Date(now).toISOString(), touched: false, settings: { autoPublish: true }, reports: reports };
+      // Demo: two providers pressed "No change" on the form today, so their counts are confirmed
+      // but unchanged since yesterday's email.
+      [["gaiser", 2.2], ["spiritlife", 1.4]].forEach(function (c) {
+        var src = reports.filter(function (r) { return r.entries.some(function (e) { return e.siteId === c[0]; }); })[0];
+        if (!src || !siteById[c[0]]) return;
+        var org = orgById[siteById[c[0]].org];
+        reports.push({ id: "seed-confirm-" + c[0], source: "form", status: "published", receivedAt: new Date(now - c[1] * 36e5).toISOString(),
+          orgId: org ? org.id : src.orgId, by: (org ? org.short : "Provider") + " \u2014 admissions", confirmOnly: true,
+          entries: [clone(src.entries.filter(function (e) { return e.siteId === c[0]; })[0])] });
+      });
+      return { version: 3, seededAt: new Date(now).toISOString(), touched: false, settings: { autoPublish: true }, reports: reports };
     }
 
     // Bed layouts providers have grown (a new bed type, or a men/women split) since data/sites.js.
@@ -120,7 +130,7 @@
 
     function load() {
       var s = read();
-      if (!s || s.version !== 2 || (!s.touched && (Date.now() - new Date(s.seededAt)) / 36e5 > RESEED_AFTER_H)) {
+      if (!s || s.version !== 3 || (!s.touched && (Date.now() - new Date(s.seededAt)) / 36e5 > RESEED_AFTER_H)) {
         s = seed();
         memory = s;
         try { root.localStorage && root.localStorage.setItem(KEY, JSON.stringify(s)); } catch (e) { /* ignore */ }
@@ -170,6 +180,29 @@
       return { counts: counts, shared: shared };
     }
 
+    // What a count says, ignoring order, so two reports can be compared.
+    function countSig(e) {
+      var rows = [];
+      Object.keys(e.counts || {}).forEach(function (t) { Object.keys(e.counts[t]).forEach(function (sx) { rows.push(t + ":" + sx + "=" + e.counts[t][sx]); }); });
+      rows.sort();
+      return JSON.stringify([rows, e.shared ? e.shared.open : null, (e.qualitative || []).map(function (q) { return q.types.join("+"); }).sort()]);
+    }
+    // Oldest report in the latest run of reports that all said the same thing.
+    function changedSince(siteId, c) {
+      var sig = countSig(c.entry), since = c.report.receivedAt, past = false;
+      reports().some(function (r) {
+        if (r.status !== "published" || r.source === "referral") return false;
+        var e = r.entries.filter(function (x) { return x.siteId === siteId; })[0];
+        if (!e) return false;
+        if (r.id === c.report.id) { past = true; return false; }
+        if (!past) return false;
+        if (countSig(e) !== sig) return true;
+        since = r.receivedAt;
+        return false;
+      });
+      return since;
+    }
+
     // Profile + current counts, in the shape the board renders.
     function boardSites() {
       var cur = current();
@@ -194,6 +227,10 @@
         site.qualitative = e.qualitative;
         site.notes = e.notes;
         site.sexSplitInferred = (e.flags || []).indexOf("sexSplitInferred") > -1;
+        // Confirmed = the provider's latest report. Changed = when the counts last differed from the report before.
+        site.confirmedAt = c.report.receivedAt;
+        site.changedAt = changedSince(p.id, c);
+        if (mine.length) site.changedAt = mine[0].receivedAt;
         site.report = { id: c.report.id, source: c.report.source, orgId: c.report.orgId, receivedAt: c.report.receivedAt, by: c.report.by, template: c.report.parse && c.report.parse.template, reason: c.report.reason, from: c.report.email && c.report.email.from };
         return site;
       });

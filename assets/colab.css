@@ -454,3 +454,7 @@ h3.sum-h { margin: 0; font-size: inherit; }
 .panel .hint, .srcdlg-took, .srcdlg-meta, .btn.small, .assign, .feed-sites, .feed-note, .rep dl, .mail ul.parsed, .site .meta { font-size: 13px; }
 .field .help, .nocall, .grid .site-name span, .legend, .site-edit-h .last, .mail pre, pre.mailbody, .contact-note, .grid-tel, .lv-grid .help, .locpanel .help { font-size: 12px; }
 .bed-none { font-size: 14px; }
+
+/* ---------- Confirmed vs. changed ---------- */
+.upd-chg { font-size: 12px; color: var(--slate); }
+.upd-cell .upd-chg { display: block; }

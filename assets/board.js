@@ -162,7 +162,7 @@
     if (state.loca !== "any") out.push({ key: "loca", label: "LOCA " + LEVEL[state.loca].short });
     if (state.pay !== "any") out.push({ key: "pay", label: PAY[state.pay].short.charAt(0).toUpperCase() + PAY[state.pay].short.slice(1) });
     if (state.sudOnly) out.push({ key: "sudOnly", label: "Substance use treatment only" });
-    if (state.recentOnly) out.push({ key: "recentOnly", label: "Updated in the last 24 hours" });
+    if (state.recentOnly) out.push({ key: "recentOnly", label: "Confirmed in the last 24 hours" });
     if (state.origin) out.push({ key: "origin", label: "Near " + state.origin.label, main: true });
     return out;
   }
@@ -400,7 +400,8 @@
   function updatedBlock(site) {
     if (site.noReport) return '<p class="upd"><span class="upd-time stale">No report yet</span></p>';
     var f = OB.when(site.report.receivedAt);
-    var html = '<p class="upd"><span class="upd-time ' + f.level + '">Updated ' + esc(dayWord(f.label)) + (f.level !== "fresh" ? " (" + esc(f.age) + ")" : "") + "</span>" +
+    var html = '<p class="upd"><span class="upd-time ' + f.level + '">Confirmed ' + esc(dayWord(f.label)) + (f.level !== "fresh" ? " (" + esc(f.age) + ")" : "") + "</span>" +
+      unchangedLine(site) +
       '<span class="upd-src">' + esc(OB.sourceText(site.report, S)) + "</span>" +
       '<button type="button" class="linkbtn" data-report="' + esc(site.report.id) + '" data-site="' + esc(site.id) + '" aria-haspopup="dialog">View source<span class="sr"> for ' + esc(site.name) + "</span></button></p>";
     var refs = site.referrals || [];
@@ -409,6 +410,13 @@
         ' <button type="button" class="linkbtn" data-undo="' + esc(refs[0].id) + '">Undo<span class="sr"> the last referral to ' + esc(site.name) + "</span></button></p>";
     }
     return html;
+  }
+  // "Count unchanged since …" when the provider re-confirmed the same numbers later.
+  function unchangedLine(site) {
+    if (!site.changedAt || !site.confirmedAt) return "";
+    var gap = new Date(site.confirmedAt) - new Date(site.changedAt);
+    if (gap < 6e4) return "";
+    return '<span class="upd-chg">Count unchanged since ' + esc(dayWord(OB.when(site.changedAt).label)) + "</span>";
   }
   function referOptions(site) {
     var out = [], order = ["detox", "shared", "residential", "php"];
@@ -602,7 +610,7 @@
           upd = '<span class="upd-time stale">No report</span>';
         } else {
           var f = OB.when(site.report.receivedAt);
-          upd = '<span class="upd-time ' + f.level + '">' + esc(f.label) + '</span><span class="upd-src">' + esc(OB.sourceText(site.report, S)) + "</span>" +
+          upd = '<span class="upd-time ' + f.level + '">Confirmed ' + esc(dayWord(f.label)) + "</span>" + unchangedLine(site) + '<span class="upd-src">' + esc(OB.sourceText(site.report, S)) + "</span>" +
             '<button type="button" class="linkbtn" data-report="' + esc(site.report.id) + '" data-site="' + esc(site.id) + '">View source</button>' +
             (site.referrals && site.referrals.length ? '<span class="upd-src">' + plural(site.referrals.length, "referral") + " since</span>" : "") +
             (site.reach.phone ? '<a class="grid-tel" href="' + tel(site.reach.phone) + '">' + esc(site.reach.phone) + "</a>" : "");
@@ -631,7 +639,7 @@
 
     $("status").textContent = plural(sites.length, "facility", "facilities") + (state.sex === "any" ? "" : state.sex === "male" ? " · counts for men" : " · counts for women") + ".";
     $("view-grid").innerHTML = sites.length
-      ? '<div class="gridwrap"><table class="grid"><caption class="sr">Open beds by facility and bed type</caption><thead><tr><th scope="col">Facility</th>' + cols + '<th scope="col">Last update</th></tr></thead><tbody>' + body + "</tbody></table>" +
+      ? '<div class="gridwrap"><table class="grid"><caption class="sr">Open beds by facility and bed type</caption><thead><tr><th scope="col">Facility</th>' + cols + '<th scope="col">Last confirmed</th></tr></thead><tbody>' + body + "</tbody></table>" +
         '<div class="legend"><span><span class="cell open"><b>6</b></span> open (M · F split where given)</span><span><span class="cell full"><b>Full</b></span> offered, 0 open</span><span><span class="cell na"><b>NA</b></span> marked NA by provider</span><span><span class="cell nr"><b>—</b></span> not in report</span><span><span class="cell avail"><b>Yes</b></span> available, no count</span></div></div>'
       : '<div class="empty">No facilities match these filters.</div>';
   }
