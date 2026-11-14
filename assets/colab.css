@@ -299,3 +299,27 @@ p a:not(.btn):not(.cbtn), li a:not(.btn):not(.cbtn), .hint a { text-decoration: 
 .beds .sub { color: #5C6075; }
 .fit-list { margin: 0; padding-left: 16px; }
 .fit-list li + li { margin-top: 2px; }
+
+/* ===== Nov 13 evening: card + filter fixes ===== */
+/* Bed tables: values centered in equal columns; bed type stays left */
+.beds { table-layout: fixed; }
+.beds th:first-child { width: 34%; }
+.beds th, .beds td, .beds thead th, .beds td[colspan] { text-align: center; }
+.beds thead th:first-child, .beds tbody th, .beds tfoot th { text-align: left; }
+/* Address under the facility name */
+.site .addr { margin: 4px 0 0; display: flex; align-items: flex-start; gap: 6px; font-size: 13px; color: var(--black); }
+.site .addr .icon { margin-top: 2px; color: var(--slate); }
+.addr-none { color: var(--slate); }
+/* Contact row: Mark a referral at the right end */
+.contact-btns { align-items: center; }
+.contact-btns .refer-btn { margin-left: auto; border-color: var(--dark-blue); color: var(--dark-blue); }
+.contact-btns .refer-btn:hover { background: var(--smoke); }
+/* One select style everywhere: same chevron and inset as the Locations control */
+select.input, select.sel-in, .sel-in {
+  -webkit-appearance: none; appearance: none; padding-right: 40px; cursor: pointer;
+  background: var(--white) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%233D3D4B' stroke-width='2'/%3E%3C/svg%3E") no-repeat right 14px center;
+}
+.selbtn { background-position: right 14px center; padding-right: 40px; }
+#map-msg:empty { display: none; }
+@media (max-width: 760px) { .contact-btns .refer-btn { margin-left: 0; } }
+.contact-btns .refer-btn { margin-top: 0; }

@@ -268,7 +268,7 @@
   }
   function referButton(site) {
     if (site.noReport || !referOptions(site).length) return "";
-    return '<button type="button" class="btn small refer-btn" data-refer="' + esc(site.id) + '" aria-haspopup="dialog">Mark a referral<span class="sr"> to ' + esc(site.name) + "</span></button>";
+    return '<button type="button" class="cbtn refer-btn" data-refer="' + esc(site.id) + '" aria-haspopup="dialog">Mark a referral<span class="sr"> to ' + esc(site.name) + "</span></button>";
   }
 
   // "Who they take": levels of care (to match the LOCA), population, exclusions, prerequisites, payment.
@@ -324,7 +324,7 @@
     var forSite = '<span class="sr"> for ' + esc(site.name) + "</span>";
     if (m) bits.push('<a class="cbtn" href="' + esc(m) + '">' + MAIL_SVG + "Email intake" + forSite + "</a>");
     if (site.geo) {
-      var dest = site.geo.precision === "address" ? site.geo.lat + "," + site.geo.lng : (site.fullName || site.name) + ", " + site.town + ", PA";
+      var dest = r.address || (site.geo.precision === "address" ? site.geo.lat + "," + site.geo.lng : (site.fullName || site.name) + ", " + site.town + ", PA");
       bits.push('<a class="cbtn" href="https://www.google.com/maps/dir/?api=1' + (state.origin ? "&amp;origin=" + state.origin.lat + "," + state.origin.lng : "") + "&amp;destination=" + esc(encodeURIComponent(dest)) + '" target="_blank" rel="noopener">Directions' + forSite + '<span class="sr"> (opens in a new tab)</span></a>');
     }
     if (r.web) bits.push('<a class="cbtn" href="' + esc(r.web) + '" target="_blank" rel="noopener">' + WEB_SVG + "Website" + forSite + '<span class="sr"> (opens in a new tab)</span></a>');
@@ -333,7 +333,13 @@
     if (em) notes.push(em.how + ".");
     else notes.push("No intake email on file.");
     if (!r.phone) notes.push("No phone on file.");
-    return '<div class="contact"><p class="contact-h">Contact admissions</p><div class="contact-btns">' + bits.join("") + '</div><p class="contact-note">' + esc(notes.join(" ")) + "</p></div>";
+    // Mark a referral sits at the right end of the same row.
+    return '<div class="contact"><p class="contact-h">Contact admissions</p><div class="contact-btns">' + bits.join("") + referButton(site) + '</div><p class="contact-note">' + esc(notes.join(" ")) + "</p></div>";
+  }
+
+  function addressLine(site) {
+    var ad = site.reach && site.reach.address;
+    return '<p class="addr"><svg class="icon" aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.1-7-11.5A7 7 0 0 1 19 9.5C19 14.9 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>' + (ad ? esc(ad) : '<span class="addr-none">Address not on file</span>') + "</p>";
   }
 
   function card(site, a) {
@@ -344,8 +350,8 @@
     return '<article class="card" id="card-' + esc(site.id) + '" aria-labelledby="h-' + esc(site.id) + '">' + box +
       '<div class="site"><h3 id="h-' + esc(site.id) + '">' + esc(site.name) + (site.fullName && site.fullName !== site.name ? ' <span class="full-name">' + esc(site.fullName) + "</span>" : "") + "</h3>" +
       '<div class="where">' + esc(site.org) + " · " + esc(site.town) + " · " + esc(regionLabel(site)) + (state.origin ? " · " + esc(distLabel(site)) : "") + "</div>" +
-      siteMeta(site) + "</div>" +
-      '<div class="side">' + updatedBlock(site) + referButton(site) + "</div>" +
+      addressLine(site) + siteMeta(site) + "</div>" +
+      '<div class="side">' + updatedBlock(site) + "</div>" +
       '<div class="bedwrap">' + bedTable(site) + bedNotes(site) + "</div>" +
       fitSection(site) +
       contactStrip(site) +
@@ -529,7 +535,7 @@
   function detail(site, a) {
     return siteMeta(site) + bedTable(site) + bedNotes(site) +
       (site.geo && PRECISION[site.geo.precision] ? '<p class="fit-note">' + PRECISION[site.geo.precision] + "</p>" : "") +
-      '<div class="ml-upd">' + updatedBlock(site) + referButton(site) + "</div>" +
+      '<div class="ml-upd">' + updatedBlock(site) + "</div>" +
       fitSection(site) + contactStrip(site);
   }
 
@@ -671,7 +677,7 @@
       setOrigin({ lat: p.coords.latitude, lng: p.coords.longitude, label: "your location" });
     }, function () { mapMsg("Location wasn’t shared. Type a ZIP code instead.", true); }, { timeout: 10000 });
   });
-  $("map-clear").addEventListener("click", function () { $("map-q").value = ""; mapMsg("Looked up with OpenStreetMap. Enter a ZIP or address only — never a client’s name."); setOrigin(null); });
+  $("map-clear").addEventListener("click", function () { $("map-q").value = ""; mapMsg(""); setOrigin(null); });
   $("map-list").addEventListener("click", function (e) {
     var b = e.target.closest("[data-sel]");
     if (b) select(b.getAttribute("data-sel"), true);

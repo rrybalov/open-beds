@@ -61,6 +61,7 @@
       text(p + "-payer", "Payment notes", "(optional)", f.payer, "text", "e.g. Pre-certification handled by us") +
       area(p + "-notes", "Admissions notes", "(one per line)", (f.notes || []).join("\n"), "e.g. Admissions until 9 PM; call ahead after 5") +
       '<' + h + ' class="form-sub">Admissions contact</' + h + '>' +
+      text(p + "-address", "Street address", "", r.address, "text", "e.g. 1375 Newark Rd, Kennett Square, PA 19348") +
       '<div class="row3">' + text(p + "-phone", "Phone", "", r.phone, "tel") + text(p + "-email", "Intake email", "", r.email, "email") + text(p + "-web", "Website", "", r.web, "url", "https://") + "</div>" +
       '<div class="err" id="' + p + '-perr" role="alert" hidden></div></details>';
   }
@@ -92,7 +93,7 @@
     // Topics with an answer count as "on file" on the board.
     fit.known = (f0.known || []).slice();
     TOPICS.forEach(function (t) { if (pol[t[0]] && fit.known.indexOf(t[0]) < 0) fit.known.push(t[0]); });
-    var reach = Object.assign({}, r0, { phone: val(p + "-phone") || null, email: val(p + "-email") || null, web: val(p + "-web") || null });
+    var reach = Object.assign({}, r0, { address: val(p + "-address") || null, phone: val(p + "-phone") || null, email: val(p + "-email") || null, web: val(p + "-web") || null });
     if (reach.phone !== r0.phone) reach.phoneFrom = reach.phone ? "updated by the provider" : null;
     if (reach.email !== r0.email) reach.emailFrom = reach.email ? "updated by the provider" : null;
 
@@ -111,6 +112,7 @@
     });
     textDiff("Payment notes", f0.payer, fit.payer, ch);
     listDiff("Admissions notes", f0.notes, fit.notes, ch);
+    textDiff("Address", r0.address, reach.address, ch);
     textDiff("Phone", r0.phone, reach.phone, ch);
     textDiff("Intake email", r0.email, reach.email, ch);
     textDiff("Website", r0.web, reach.web, ch);

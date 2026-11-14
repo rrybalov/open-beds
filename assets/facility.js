@@ -107,7 +107,7 @@
       id: id, org: orgId, name: d.name, aliases: [d.name.toLowerCase()], town: d.town, region: d.region, population: d.population, services: d.services,
       contact: d.phone || null, beds: FULL_LAYOUT, custom: true,
       fit: { levels: d.levels, serves: d.population === "adult" ? "Adults" : "Adolescents", excludes: d.excludes.length ? d.excludes : undefined, payer: d.payer || undefined, known: [], source: [from] },
-      reach: { phone: d.phone || null, phoneFrom: d.phone ? (from === "admin" ? "DHS entry" : "provider’s form") : null, email: d.email || null, emailFrom: d.email ? (from === "admin" ? "DHS entry" : "provider’s form") : null, web: d.web || null },
+      reach: { address: d.address ? d.address + (/,/.test(d.address) ? "" : ", " + d.town + ", PA") : null, addressFrom: d.address ? (from === "admin" ? "DHS entry" : "provider’s form") : null, phone: d.phone || null, phoneFrom: d.phone ? (from === "admin" ? "DHS entry" : "provider’s form") : null, email: d.email || null, emailFrom: d.email ? (from === "admin" ? "DHS entry" : "provider’s form") : null, web: d.web || null },
       geo: geo ? { lat: geo.lat, lng: geo.lng, precision: d.address ? "address" : "town" } : null
     };
     return { site: site, entry: entry ? Object.assign({}, entry, { siteId: id }) : null };

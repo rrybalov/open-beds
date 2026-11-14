@@ -163,9 +163,31 @@
     "providence-house": { phone: "814-430-4449", phoneFrom: "Pyramid Healthcare 24/7 admissions, pyramid-healthcare.com — not a Providence House line", web: "https://www.pyramid-healthcare.com" },
     "spiritlife": { phone: "724-465-2165", phoneFrom: "public treatment directory (startyourrecovery.org) — confirm", web: "https://www.spiritliferecovery.org" }
   };
+  // Street addresses, with the public page each was taken from (Nov 13, 2026).
+  var ADDRESS = {
+    "bowling-green": ["1375 Newark Rd, Kennett Square, PA 19348", "acadiahealthcare.com"],
+    "bradford": ["64 School St, Millerton, PA 16936", "startyourrecovery.org"],
+    "cove-forge": ["202 Cove Forge Rd, Williamsburg, PA 16693", "carf.org"],
+    "allenwood": ["360 White Deer Run Rd, Allenwood, PA 17810", "carf.org"],
+    "lehigh": ["1620 Riverside Dr, Bethlehem, PA 18016", "acadiahealthcare.com"],
+    "york": ["106 Davies Dr, York, PA 17402", "acadiahealthcare.com"],
+    "mt-zion": ["1600 Mt. Zion Rd, York, PA 17406", "whitedeerrun.com"],
+    "york-php": ["257 E Market St, York, PA 17403", "whitedeerrun.com"],
+    "pmrc": ["3437 Route 715, Henryville, PA 18332", "startyourrecovery.org"],
+    "hcrc": ["890 Bethel Hill Rd, Shickshinny, PA 18655", "startyourrecovery.org"],
+    "hcrc-adol": ["890 Bethel Hill Rd, Shickshinny, PA 18655", "startyourrecovery.org"],
+    "upmc-mercy": ["1400 Locust St, Pittsburgh, PA 15219", "upmc.com"],
+    "upmc-mckeesport": ["1500 Fifth Ave, McKeesport, PA 15132", "upmc.com"],
+    "vfmc": ["1033 W Germantown Pike, Norristown, PA 19403", "vivian.com"],
+    "silvermist-pgh": ["130 Critchlow School Rd, Renfrew, PA 16053", "silvermistrecovery.com"],
+    "silvermist-pocono": ["272 Hamlin Hwy, Moscow, PA 18444", "silvermistrecovery.com"],
+    "gaiser": ["165 Old Plank Rd, Butler, PA 16002", "PA 211"],
+    "spiritlife": ["170 Father Martin Telenson Ln, Penn Run, PA 15765", "startyourrecovery.org"]
+  };
   OPEN_BEDS_SITES.sites.forEach(function (s) {
-    var r = REACH[s.id] || {};
-    s.reach = { phone: s.contact || r.phone || null, phoneFrom: s.contact ? "provider’s bed email" : r.phoneFrom || null, email: r.email || null, emailFrom: r.emailFrom || null, web: r.web || null };
+    var r = REACH[s.id] || {}, ad = ADDRESS[s.id] || [];
+    s.reach = { phone: s.contact || r.phone || null, phoneFrom: s.contact ? "provider’s bed email" : r.phoneFrom || null, email: r.email || null, emailFrom: r.emailFrom || null, web: r.web || null,
+      address: ad[0] || null, addressFrom: ad[1] || null };
     s.contact = s.reach.phone;
   });
 
