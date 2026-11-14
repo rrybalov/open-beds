@@ -69,7 +69,15 @@ Either way: drop attachments, keep the text body for audit, and alert an admin w
 | GET | `/api/reports?status=review` | Admin | County SSO |
 | POST | `/api/reports/{id}/publish` · `/reject` | Admin | County SSO |
 | POST | `/api/referrals` · `/api/referrals/{id}/undo` | Board (intake staff) | Staff sign-in |
+| PUT | `/api/sites/{id}/profile` | Provider form, Admin | Per-provider link token / County SSO |
+| POST | `/api/sites` (from the provider form) | Provider form | Per-provider link token — held as `review` until DHS approves |
 | GET/PUT/POST | `/api/sites`, `/api/orgs` (POST adds a facility) | Admin | County SSO |
+
+**Facility details** (levels of care, who they take, pregnancy / MOUD / medical / legal notes, payment, contact) are reports with a `profile: { siteId, before, after, changes }` block. They apply at once; reverting restores `before`.
+
+**New facilities from providers** arrive as one report listing `newSites` (and `newOrg` for a new provider). They stay off the board until DHS approves; DHS-added facilities publish at once.
+
+**Partial updates:** form and DHS updates carry only the fields someone typed. The server lays them over the site's current, referral-adjusted counts, so a blank field means "no change".
 
 **Referrals** are reports with `source: "referral"` and no counts: `{ siteId, type, sex, by }`. The board takes one bed off a site's latest count for each referral marked *after* that count arrived. When the provider sends a new count, older referrals stop applying — the provider's number already reflects them. Undo marks the referral `undone`. The board should poll `/api/board` (or use server-sent events) every 30–60 seconds so a referral reaches every viewer quickly.
 

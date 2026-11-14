@@ -297,3 +297,5 @@ details.sim > summary { min-height: 44px; display: flex; align-items: center; }
 /* Links inside running text are underlined (1.4.1) */
 p a:not(.btn):not(.cbtn), li a:not(.btn):not(.cbtn), .hint a { text-decoration: underline; }
 .beds .sub { color: #5C6075; }
+.fit-list { margin: 0; padding-left: 16px; }
+.fit-list li + li { margin-top: 2px; }

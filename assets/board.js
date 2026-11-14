@@ -283,7 +283,7 @@
     var f = site.fit || {};
     var rows = [["LOCA levels", levelChips(f) + (f.levelsNote ? '<span class="fit-note">' + esc(f.levelsNote) + "</span>" : "")]];
     if (f.serves) rows.push(["Serves", esc(f.serves)]);
-    (f.excludes || []).forEach(function (x) { rows.push(["Won’t take", '<span class="fit-x">' + esc(x) + "</span>"]); });
+    if ((f.excludes || []).length) rows.push(["Won’t take", '<ul class="fit-list">' + f.excludes.map(function (x) { return '<li class="fit-x">' + esc(x) + "</li>"; }).join("") + "</ul>"]);
     (f.requires || []).forEach(function (x) { rows.push(["Requires", esc(x)]); });
     if (f.takes && f.takes.length) rows.push(["Takes", esc(f.takes.join(" · "))]);
     KNOWN.forEach(function (k) { var t = (f.policies || {})[k[0]]; if (t) rows.push([k[1].charAt(0).toUpperCase() + k[1].slice(1), esc(t)]); });
